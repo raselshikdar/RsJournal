@@ -1,0 +1,6 @@
+{
+  "name": "RS Blog & Tech Journal",
+  "description": "ব্যক্তিগত অভিজ্ঞতা, প্রযুক্তি ও সমসাময়িক ভাবনা নিয়ে আধুনিক ও দ্রুতগতির পার্সোনাল ব্লগ এবং পূর্ণাঙ্গ সিএমএস।",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

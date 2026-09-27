@@ -1,0 +1,95 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global fallback
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'rsblog597@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Posts Collection
+    match /posts/{postId} {
+      // Anyone can read published posts; admin can read drafts
+      allow read: if resource.data.published == true || isAdmin();
+      
+      // Admin can create, update, delete posts
+      allow create, delete: if isAdmin();
+      
+      // Updates: Admin full access, or anonymous/readers can only increment viewsCount or likesCount
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewsCount', 'likesCount']) &&
+        request.resource.data.viewsCount is number &&
+        request.resource.data.likesCount is number
+      );
+
+      // Comments subcollection
+      match /comments/{commentId} {
+        allow read: if true;
+        
+        // Anyone can create a comment if valid
+        allow create: if request.resource.data.postId == postId &&
+          request.resource.data.authorName is string &&
+          request.resource.data.authorName.size() > 0 &&
+          request.resource.data.authorName.size() <= 100 &&
+          request.resource.data.content is string &&
+          request.resource.data.content.size() > 0 &&
+          request.resource.data.content.size() <= 2000;
+          
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    // Contact messages
+    match /contact_messages/{messageId} {
+      allow create: if request.resource.data.name is string &&
+        request.resource.data.name.size() > 0 &&
+        request.resource.data.name.size() <= 100 &&
+        request.resource.data.email is string &&
+        request.resource.data.email.size() <= 150 &&
+        request.resource.data.message is string &&
+        request.resource.data.message.size() > 0 &&
+        request.resource.data.message.size() <= 3000;
+        
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Newsletter Subscribers
+    match /subscribers/{subscriberId} {
+      allow create: if request.resource.data.email is string &&
+        request.resource.data.email.size() > 0 &&
+        request.resource.data.email.size() <= 150;
+        
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Gallery
+    match /gallery/{itemId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if isSignedIn() && request.auth.uid == userId &&
+        (request.resource.data.role == 'reader' || (request.resource.data.role == 'admin' && request.auth.token.email == 'rsblog597@gmail.com'));
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (request.auth.uid == userId && request.resource.data.role == resource.data.role)
+      );
+      allow delete: if isAdmin();
+    }
+  }
+}
