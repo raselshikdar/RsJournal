@@ -105,11 +105,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  min-height: 64px;
-  transition: min-height 0.2s ease;
-}
-
-.mag-header.is-scrolled .mag-header-inner {
   min-height: 56px;
 }
 
