@@ -82,8 +82,8 @@ export function ContactForm() {
               </div>
               <div>
                 <div className="text-[11px] text-zinc-400">ইমেইল ঠিকানা</div>
-                <a href="mailto:rsblog597@gmail.com" className="font-medium hover:underline text-zinc-900 dark:text-zinc-100">
-                  rsblog597@gmail.com
+                <a href="mailto:info@rasel.dev.bd" className="font-medium hover:underline text-zinc-900 dark:text-zinc-100">
+                  info@rasel.dev.bd
                 </a>
               </div>
             </div>

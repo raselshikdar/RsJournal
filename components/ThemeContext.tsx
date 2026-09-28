@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useSyncExternalStore } from 'react';
 
 type Theme = 'light' | 'dark';
 type FontSize = 'sm' | 'base' | 'lg' | 'xl';
@@ -12,27 +12,57 @@ interface ThemeContextType {
   setFontSize: (size: FontSize) => void;
   focusMode: boolean;
   toggleFocusMode: () => void;
+  mounted: boolean;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('rs_blog_theme');
-        return saved === 'dark' ? 'dark' : 'light';
-      } catch {
-        return 'light';
-      }
+const emptySubscribe = () => () => {};
+
+function useIsMounted() {
+  return useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+}
+
+function subscribeTheme(callback: () => void) {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener('storage', callback);
+  window.addEventListener('theme-change', callback);
+  return () => {
+    window.removeEventListener('storage', callback);
+    window.removeEventListener('theme-change', callback);
+  };
+}
+
+function getThemeSnapshot(): Theme {
+  try {
+    const saved = localStorage.getItem('rs_blog_theme');
+    if (saved === 'dark') return 'dark';
+    if (saved === 'light') return 'light';
+    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
     }
     return 'light';
-  });
+  } catch {
+    return 'light';
+  }
+}
+
+function getServerThemeSnapshot(): Theme {
+  return 'light';
+}
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const mounted = useIsMounted();
+  const theme = useSyncExternalStore(subscribeTheme, getThemeSnapshot, getServerThemeSnapshot);
 
   const [fontSize, setFontSize] = useState<FontSize>('base');
   const [focusMode, setFocusMode] = useState<boolean>(false);
 
-  // Synchronize the DOM element with theme state
+  // Synchronize document.documentElement class when theme changes
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -42,16 +72,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [theme]);
 
   const toggleTheme = useCallback(() => {
-    setTheme((prevTheme) => {
-      const nextTheme: Theme = prevTheme === 'light' ? 'dark' : 'light';
-      try {
-        localStorage.setItem('rs_blog_theme', nextTheme);
-      } catch {
-        // Ignored
-      }
-      return nextTheme;
-    });
-  }, []);
+    const nextTheme: Theme = theme === 'light' ? 'dark' : 'light';
+    try {
+      localStorage.setItem('rs_blog_theme', nextTheme);
+      window.dispatchEvent(new Event('theme-change'));
+    } catch {
+      // Ignored
+    }
+  }, [theme]);
 
   const handleSetFontSize = useCallback((size: FontSize) => {
     setFontSize(size);
@@ -70,6 +98,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         setFontSize: handleSetFontSize,
         focusMode,
         toggleFocusMode,
+        mounted,
       }}
     >
       {children}

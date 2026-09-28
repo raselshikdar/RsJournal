@@ -38,7 +38,6 @@
 
 @layer base {
   html {
-    scroll-behavior: smooth;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
   
@@ -1595,7 +1594,7 @@
    ========================================= */
 .site-public .mag-footer {
   border-top: 1px solid var(--line);
-  background-color: var(--bg);
+  background-color: var(--bg-2);
   padding: 56px 0 28px;
 }
 

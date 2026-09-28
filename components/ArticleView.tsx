@@ -39,19 +39,23 @@ export function ArticleView({ post, onBack, allPosts, onSelectPost }: ArticleVie
   const [copiedState, setCopiedState] = useState<'idle' | 'copied'>('idle');
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
-  // Comments state with instant retrieval from localStorage or INITIAL_COMMENTS
-  const [comments, setComments] = useState<Comment[]>(() => {
-    if (typeof window !== 'undefined') {
+  // Comments state with consistent initial state between SSR and client
+  const [comments, setComments] = useState<Comment[]>(() => INITIAL_COMMENTS[post.id] || []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
       try {
         const cached = localStorage.getItem(`comments_${post.id}`);
         if (cached) {
           const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setComments(parsed);
+          }
         }
       } catch {}
-    }
-    return INITIAL_COMMENTS[post.id] || [];
-  });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [post.id]);
   const [newCommentName, setNewCommentName] = useState(user?.displayName || '');
   const [newCommentEmail, setNewCommentEmail] = useState(user?.email || '');
   const [newCommentContent, setNewCommentContent] = useState('');
@@ -212,7 +216,7 @@ export function ArticleView({ post, onBack, allPosts, onSelectPost }: ArticleVie
       id: commentId,
       postId: post.id,
       authorName: cleanName,
-      authorEmail: newCommentEmail.trim() || 'reader@suhanurrahman.com',
+      authorEmail: newCommentEmail.trim() || 'reader@rasel.dev.bd',
       authorAvatar: user?.photoURL || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(cleanName)}`,
       content: cleanContent,
       createdAt: new Date().toISOString(),

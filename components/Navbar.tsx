@@ -27,7 +27,7 @@ interface MenuItem {
 }
 
 export function Navbar({ currentView, setCurrentView, openSearch, onSelectCategory }: NavbarProps) {
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, mounted } = useTheme();
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
@@ -104,13 +104,13 @@ export function Navbar({ currentView, setCurrentView, openSearch, onSelectCatego
     } else {
       setCurrentView('articles');
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
   const handleHomeClick = () => {
     closeDrawer();
     setCurrentView('home');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
   return (
@@ -134,7 +134,7 @@ export function Navbar({ currentView, setCurrentView, openSearch, onSelectCatego
               onClick={handleHomeClick}
               className="mag-logo hover:opacity-95 transition-opacity text-left cursor-pointer"
             >
-              <span>সোহানুর</span>&nbsp;<b>রহমান</b>
+              <span>রাসেল</span>&nbsp;<b>শিকদার</b>
               <span style={{ fontSize: '0.5em', color: 'var(--accent)', marginLeft: 6, fontWeight: 600 }}>
                 জার্নাল
               </span>
@@ -196,9 +196,9 @@ export function Navbar({ currentView, setCurrentView, openSearch, onSelectCatego
               className="mag-icon-btn"
               aria-label="Toggle theme"
               onClick={toggleTheme}
-              title={theme === 'dark' ? 'লাইট মোড চালু করুন' : 'ডার্ক মোড চালু করুন'}
+              title={mounted && theme === 'dark' ? 'লাইট মোড চালু করুন' : 'ডার্ক মোড চালু করুন'}
             >
-              {theme === 'dark' ? (
+              {mounted && theme === 'dark' ? (
                 <Sun size={18} strokeWidth={1.9} className="text-amber-400" />
               ) : (
                 <Moon size={18} strokeWidth={1.9} />
@@ -218,7 +218,7 @@ export function Navbar({ currentView, setCurrentView, openSearch, onSelectCatego
             {/* Drawer Header */}
             <div className="flex items-center justify-between pb-3 border-b border-[var(--line-2)] mb-4">
               <span className="mag-logo">
-                <span>সোহানুর</span>&nbsp;<b>রহমান</b>
+                <span>রাসেল</span>&nbsp;<b>শিকদার</b>
                 <span style={{ fontSize: '0.5em', color: 'var(--accent)', marginLeft: 6, fontWeight: 600 }}>
                   জার্নাল
                 </span>
@@ -236,7 +236,7 @@ export function Navbar({ currentView, setCurrentView, openSearch, onSelectCatego
             {/* Drawer Portfolio Link */}
             <a
               className="mag-drawer-portfolio"
-              href="https://suhanurrahman.com/"
+              href="https://rasel.dev.bd"
               target="_blank"
               rel="noreferrer"
             >

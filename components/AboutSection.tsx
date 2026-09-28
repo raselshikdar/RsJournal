@@ -12,35 +12,35 @@ export function AboutSection({ onContactClick, onSearchClick }: AboutSectionProp
     <div className="about-layout">
       {/* Left Article Area */}
       <article className="reveal">
-        <div className="about-kicker">About</div>
-        <h1 className="about-title font-serif-bn">সোহানুর রহমান</h1>
+        <div className="about-kicker">About / পরিচিতি</div>
+        <h1 className="about-title font-serif-bn">রাসেল শিকদার</h1>
         <p className="about-lead font-serif-bn">
-          প্রযুক্তি, গবেষণা, ডেটা, ডিজিটাল সংস্কৃতি এবং লেখালেখি নিয়ে কাজ করি। এই জার্নাল আমার শেখা, ভাবনা, অনুসন্ধান আর কাজের নোট রাখার একটি স্বাধীন জায়গা।
+          ফুল-স্ট্যাক ওয়েব ডেভেলপার ও ক্রিয়েটিভ টেকনোলজিস্ট। React, TypeScript, আধুনিক ওয়েব আর্কিটেকচার এবং ডিজিটাল ইনোভেশন নিয়ে কাজ করি। এই জার্নাল আমার শেখা, ভাবনা, গবেষণা আর কাজের নোট রাখার একটি স্বাধীন জায়গা।
         </p>
 
         <div className="about-body space-y-5">
           <p>
-            আমি প্রযুক্তি ও গবেষণার মাঝের জায়গাটায় বেশি স্বচ্ছন্দ। ওয়েব, ডেটা, ডিজিটাল টুল এবং গবেষণাভিত্তিক কাজের মাধ্যমে জটিল বিষয়কে ব্যবহারযোগ্য ও বোধগম্য করে তোলার চেষ্টা করি।
+            আমি রাসেল শিকদার — বিগত ৫+ বছর ধরে সফটওয়্যার ডেভেলপমেন্ট ও ওয়েব প্ল্যাটফর্মে কাজ করছি। জটিল টেকনিক্যাল সমস্যার মার্জিত ও ইউজার-ফ্রেন্ডলি ডিজিটাল সমাধান গড়ে তোলাই আমার মূল প্যাশন।
           </p>
           <p>
-            এই জার্নালে আমি প্রযুক্তি ও এআই, গবেষণা ও ডেটা, ডিজিটাল সংস্কৃতি, অনুসন্ধান এবং নিজের কাজ থেকে পাওয়া অভিজ্ঞতা নিয়ে লিখি। সব লেখা একই ধরনের নয়, তবে একটি বিষয় গুরুত্বপূর্ণ: কৌতূহল, প্রমাণ এবং নিজের মতো করে ভাবার জায়গা।
+            এই টেক জার্নালে আমি আধুনিক ওয়েব প্রযুক্তি, রিঅ্যাক্ট ও নেক্সট.জেএস আর্কিটেকচার, পারফরম্যান্স অপ্টিমাইজেশন, এআই গবেষণা, সাইবার সিকিউরিটি এবং নিজের প্র্যাকটিক্যাল ডেভেলপমেন্ট অভিজ্ঞতা প্রাঞ্জল বাংলায় তুলে ধরি।
           </p>
           <p>
-            আমার পেশাগত কাজ ও অন্যান্য প্রজেক্ট সম্পর্কে জানতে{' '}
-            <a href="https://suhanurrahman.com/" target="_blank" rel="noreferrer">
-              suhanurrahman.com
+            আমার প্রজেক্ট ও পোর্টফোলিও সম্পর্কে আরও বিস্তারিত জানতে ভিজিট করুন{' '}
+            <a href="https://rasel.dev.bd" target="_blank" rel="noreferrer" className="text-[var(--accent)] underline underline-offset-3 font-semibold">
+              rasel.dev.bd
             </a>{' '}
-            দেখতে পারেন। অথবা সরাসরি যোগাযোগ করতে{' '}
+            অথবা সরাসরি যোগাযোগ করতে{' '}
             {onContactClick ? (
               <button
                 type="button"
                 onClick={onContactClick}
-                className="text-[var(--accent)] underline underline-offset-3 cursor-pointer"
+                className="text-[var(--accent)] underline underline-offset-3 cursor-pointer font-semibold"
               >
                 বার্তা পাঠান
               </button>
             ) : (
-              <a href="mailto:rsblog597@gmail.com">যোগাযোগ করুন</a>
+              <a href="mailto:info@rasel.dev.bd" className="text-[var(--accent)] underline underline-offset-3 font-semibold">যোগাযোগ করুন</a>
             )}
             ।
           </p>
@@ -51,26 +51,32 @@ export function AboutSection({ onContactClick, onSearchClick }: AboutSectionProp
       <aside className="about-side reveal">
         <div className="about-card">
           <h2>যে বিষয়গুলো নিয়ে লিখি</h2>
-          <p>প্রযুক্তি, এআই, গবেষণা, ডেটা, ডিজিটাল সংস্কৃতি, অনুসন্ধান ও ওয়েব।</p>
+          <p>ফুল-স্ট্যাক ওয়েব ডেভেলপমেন্ট, React, TypeScript, Next.js, ক্লাউড, এআই ও ডিজিটাল সংস্কৃতি।</p>
         </div>
 
         <div className="about-card">
           <h2>অনলাইনে</h2>
           <div className="about-links">
-            <a href="https://suhanurrahman.com/" target="_blank" rel="noreferrer">
-              Portfolio ↗
+            <a href="https://rasel.dev.bd" target="_blank" rel="noreferrer">
+              Portfolio (rasel.dev.bd) ↗
+            </a>
+            <a href="https://github.com/raselshikdar" target="_blank" rel="noreferrer">
+              GitHub ↗
+            </a>
+            <a href="https://linkedin.com/in/raselshikdar" target="_blank" rel="noreferrer">
+              LinkedIn ↗
+            </a>
+            <a href="https://twitter.com/raselshikdar_" target="_blank" rel="noreferrer">
+              X (Twitter) ↗
+            </a>
+            <a href="https://facebook.com/raselverse" target="_blank" rel="noreferrer">
+              Facebook ↗
             </a>
             {onSearchClick && (
-              <button type="button" onClick={onSearchClick}>
+              <button type="button" onClick={onSearchClick} className="text-left">
                 জার্নাল সার্চ ↗
               </button>
             )}
-            <a href="https://github.com" target="_blank" rel="noreferrer">
-              GitHub ↗
-            </a>
-            <a href="https://linkedin.com" target="_blank" rel="noreferrer">
-              LinkedIn ↗
-            </a>
           </div>
         </div>
       </aside>

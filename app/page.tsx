@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import { Plus } from 'lucide-react';
 import { Post, BLOG_CATEGORIES } from '../lib/types';
 import { INITIAL_POSTS, INITIAL_GALLERY } from '../lib/sample-data';
@@ -16,6 +16,19 @@ import { SearchModal } from '../components/SearchModal';
 import { SearchPageSection } from '../components/SearchPageSection';
 import { PrivacySection } from '../components/PrivacySection';
 import { ScrollToTop } from '../components/ScrollToTop';
+
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
+interface HistorySnapshot {
+  view: string;
+  selectedPostId: string | null;
+  selectedPost: Post | null;
+  activeCategory: string;
+  activeSubcategory: string;
+  categoryPage: number;
+  searchPageQuery: string;
+  scrollY: number;
+}
 
 const CATEGORY_MAP: Record<string, {
   name: string;
@@ -92,6 +105,170 @@ export default function BlogHome() {
   const [searchPageQuery, setSearchPageQuery] = useState<string>('');
   const [displayCount, setDisplayCount] = useState<number>(6);
 
+  // Navigation history & instant scroll restoration refs
+  const historyStackRef = useRef<HistorySnapshot[]>([]);
+  const pendingScrollRestoreRef = useRef<number | null>(null);
+  const postsRef = useRef<Post[]>(posts);
+  useEffect(() => {
+    postsRef.current = posts;
+  }, [posts]);
+
+  const findPostById = useCallback((id: string | null): Post | null => {
+    if (!id) return null;
+    return postsRef.current.find((p) => p.id === id) || INITIAL_POSTS.find((p) => p.id === id) || null;
+  }, []);
+
+  const navigateTo = (
+    newView: string,
+    options?: {
+      post?: Post | null;
+      category?: string;
+      subcategory?: string;
+      page?: number;
+      searchQuery?: string;
+    }
+  ) => {
+    const currentScroll = typeof window !== 'undefined' ? window.scrollY : 0;
+    const currentSnapshot: HistorySnapshot = {
+      view: currentView,
+      selectedPostId: selectedPost?.id || null,
+      selectedPost,
+      activeCategory,
+      activeSubcategory,
+      categoryPage,
+      searchPageQuery,
+      scrollY: currentScroll,
+    };
+
+    historyStackRef.current.push(currentSnapshot);
+
+    const targetCategory = options?.category !== undefined ? options.category : (newView === 'home' ? 'all' : activeCategory);
+    const targetSubcategory = options?.subcategory !== undefined ? options.subcategory : 'all';
+    const targetPage = options?.page !== undefined ? options.page : 1;
+    const targetSearch = options?.searchQuery !== undefined ? options.searchQuery : '';
+    const targetPost = options?.post !== undefined ? options.post : null;
+
+    if (typeof window !== 'undefined') {
+      try {
+        window.history.replaceState({ appNav: true, snapshot: currentSnapshot }, '');
+        const nextSnapshot: HistorySnapshot = {
+          view: newView,
+          selectedPostId: targetPost?.id || null,
+          selectedPost: targetPost,
+          activeCategory: targetCategory,
+          activeSubcategory: targetSubcategory,
+          categoryPage: targetPage,
+          searchPageQuery: targetSearch,
+          scrollY: 0,
+        };
+        window.history.pushState({ appNav: true, snapshot: nextSnapshot }, '');
+      } catch {}
+    }
+
+    pendingScrollRestoreRef.current = 0;
+    setCurrentView(newView);
+    setSelectedPost(targetPost);
+    if (options?.category !== undefined) setActiveCategory(options.category);
+    if (options?.subcategory !== undefined) setActiveSubcategory(options.subcategory);
+    if (options?.page !== undefined) setCategoryPage(options.page);
+    if (options?.searchQuery !== undefined) setSearchPageQuery(options.searchQuery);
+
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  };
+
+  const navigateBack = useCallback(() => {
+    if (historyStackRef.current.length > 0) {
+      const prev = historyStackRef.current.pop()!;
+      pendingScrollRestoreRef.current = prev.scrollY;
+      setCurrentView(prev.view);
+      setSelectedPost(prev.selectedPost || findPostById(prev.selectedPostId));
+      setActiveCategory(prev.activeCategory);
+      setActiveSubcategory(prev.activeSubcategory);
+      setCategoryPage(prev.categoryPage);
+      setSearchPageQuery(prev.searchPageQuery);
+    } else {
+      pendingScrollRestoreRef.current = 0;
+      setSelectedPost(null);
+      setCurrentView('home');
+    }
+  }, [findPostById]);
+
+  const handleSelectPost = (post: Post) => {
+    navigateTo('article-detail', { post });
+  };
+
+  const handleBackToArticles = () => {
+    if (typeof window !== 'undefined' && window.history.state?.appNav && window.history.length > 1) {
+      window.history.back();
+    } else {
+      navigateBack();
+    }
+  };
+
+  // Browser popstate handler & manual scroll restoration setup
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if ('scrollRestoration' in window.history) {
+        window.history.scrollRestoration = 'manual';
+      }
+
+      if (!window.history.state?.snapshot) {
+        const initialSnapshot: HistorySnapshot = {
+          view: 'home',
+          selectedPostId: null,
+          selectedPost: null,
+          activeCategory: 'all',
+          activeSubcategory: 'all',
+          categoryPage: 1,
+          searchPageQuery: '',
+          scrollY: 0,
+        };
+        try {
+          window.history.replaceState({ appNav: true, snapshot: initialSnapshot }, '');
+        } catch {}
+      }
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      const snapshot = event.state?.snapshot as HistorySnapshot | undefined;
+      if (snapshot) {
+        pendingScrollRestoreRef.current = snapshot.scrollY || 0;
+        setCurrentView(snapshot.view || 'home');
+        setSelectedPost(snapshot.selectedPost || findPostById(snapshot.selectedPostId));
+        setActiveCategory(snapshot.activeCategory || 'all');
+        setActiveSubcategory(snapshot.activeSubcategory || 'all');
+        setCategoryPage(snapshot.categoryPage || 1);
+        setSearchPageQuery(snapshot.searchPageQuery || '');
+        if (historyStackRef.current.length > 0) {
+          historyStackRef.current.pop();
+        }
+      } else {
+        navigateBack();
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [findPostById, navigateBack]);
+
+  // Instant scroll restore effect: executes before paint to prevent any animated scroll
+  useIsomorphicLayoutEffect(() => {
+    if (pendingScrollRestoreRef.current !== null) {
+      const targetY = pendingScrollRestoreRef.current;
+      pendingScrollRestoreRef.current = null;
+
+      window.scrollTo({ top: targetY, behavior: 'instant' });
+
+      const raf1 = requestAnimationFrame(() => {
+        window.scrollTo({ top: targetY, behavior: 'instant' });
+      });
+
+      return () => cancelAnimationFrame(raf1);
+    }
+  }, [currentView, selectedPost, activeCategory, activeSubcategory, categoryPage]);
+
   // Initialize Firebase connection and sync posts
   useEffect(() => {
     testConnection().catch(() => {});
@@ -113,18 +290,6 @@ export default function BlogHome() {
       // Fallback
     }
   }, []);
-
-  const handleSelectPost = (post: Post) => {
-    setSelectedPost(post);
-    setCurrentView('article-detail');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleBackToArticles = () => {
-    setSelectedPost(null);
-    setCurrentView('articles');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
 
   // Chronologically ordered published posts
   const publishedPosts = [...posts]
@@ -220,22 +385,18 @@ export default function BlogHome() {
       <Navbar
         currentView={currentView}
         setCurrentView={(view) => {
-          setSelectedPost(null);
           if (view === 'search') {
-            setSearchPageQuery('');
-            setCurrentView('search');
+            navigateTo('search', { searchQuery: '' });
           } else {
-            setCurrentView(view);
+            navigateTo(view);
           }
-          window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         onSelectCategory={(catSlug) => {
-          setSelectedPost(null);
-          setActiveCategory(catSlug);
-          setActiveSubcategory('all');
-          setCategoryPage(1);
-          setCurrentView('category');
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+          navigateTo('category', {
+            category: catSlug,
+            subcategory: 'all',
+            page: 1,
+          });
         }}
         openSearch={() => setIsSearchOpen(true)}
       />
@@ -282,12 +443,11 @@ export default function BlogHome() {
                       className="mag-chip cursor-pointer"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedPost(null);
-                        setActiveCategory(leadPost.category);
-                        setActiveSubcategory('all');
-                        setCategoryPage(1);
-                        setCurrentView('category');
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        navigateTo('category', {
+                          category: leadPost.category,
+                          subcategory: 'all',
+                          page: 1,
+                        });
                       }}
                     >
                       {getCategoryMeta(leadPost.category).name}
@@ -323,12 +483,11 @@ export default function BlogHome() {
                             className="mag-chip text-xs cursor-pointer"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setSelectedPost(null);
-                              setActiveCategory(post.category);
-                              setActiveSubcategory('all');
-                              setCategoryPage(1);
-                              setCurrentView('category');
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                              navigateTo('category', {
+                                category: post.category,
+                                subcategory: 'all',
+                                page: 1,
+                              });
                             }}
                           >
                             {meta.name}
@@ -356,12 +515,11 @@ export default function BlogHome() {
                 </h2>
                 <button
                   onClick={() => {
-                    setSelectedPost(null);
-                    setActiveCategory('tech-gossip');
-                    setActiveSubcategory('all');
-                    setCategoryPage(1);
-                    setCurrentView('category');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    navigateTo('category', {
+                      category: 'tech-gossip',
+                      subcategory: 'all',
+                      page: 1,
+                    });
                   }}
                   className="mag-all cursor-pointer"
                 >
@@ -401,10 +559,11 @@ export default function BlogHome() {
                 </h2>
                 <button
                   onClick={() => {
-                    setSelectedPost(null);
-                    setActiveCategory('all');
-                    setCurrentView('articles');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    navigateTo('category', {
+                      category: 'all',
+                      subcategory: 'all',
+                      page: 1,
+                    });
                   }}
                   className="mag-all cursor-pointer"
                 >
@@ -448,7 +607,7 @@ export default function BlogHome() {
 
                 <a
                   className="mag-btn primary mag-donation-btn cursor-pointer"
-                  href="https://www.supportkori.com/suhanurrahman"
+                  href="https://rasel.dev.bd"
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -527,11 +686,11 @@ export default function BlogHome() {
                           <span
                             className="mag-chip cursor-pointer"
                             onClick={() => {
-                              setActiveCategory(post.category);
-                              setActiveSubcategory('all');
-                              setCategoryPage(1);
-                              setCurrentView('category');
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                              navigateTo('category', {
+                                category: post.category,
+                                subcategory: 'all',
+                                page: 1,
+                              });
                             }}
                           >
                             {meta.name}
@@ -576,8 +735,11 @@ export default function BlogHome() {
                     <button
                       type="button"
                       onClick={() => {
-                        setCategoryPage((p) => Math.max(1, p - 1));
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        navigateTo('category', {
+                          category: activeCategory,
+                          subcategory: activeSubcategory,
+                          page: Math.max(1, categoryPage - 1),
+                        });
                       }}
                       className="mag-btn cursor-pointer"
                     >
@@ -591,8 +753,11 @@ export default function BlogHome() {
                     <button
                       type="button"
                       onClick={() => {
-                        setCategoryPage((p) => p + 1);
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        navigateTo('category', {
+                          category: activeCategory,
+                          subcategory: activeSubcategory,
+                          page: categoryPage + 1,
+                        });
                       }}
                       className="mag-btn cursor-pointer"
                     >
@@ -619,13 +784,10 @@ export default function BlogHome() {
           <div className="mag-container pt-8">
             <AboutSection 
               onContactClick={() => {
-                setCurrentView('contact');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                navigateTo('contact');
               }} 
               onSearchClick={() => {
-                setSearchPageQuery('');
-                setCurrentView('search');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                navigateTo('search', { searchQuery: '' });
               }}
             />
           </div>
@@ -647,12 +809,10 @@ export default function BlogHome() {
           <div className="mag-container pt-8">
             <PrivacySection
               onHomeClick={() => {
-                setCurrentView('home');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                navigateTo('home');
               }}
               onContactClick={() => {
-                setCurrentView('contact');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                navigateTo('contact');
               }}
             />
           </div>
@@ -670,7 +830,6 @@ export default function BlogHome() {
       {/* Magazine Footer */}
       <Footer
         onNavigate={(viewId) => {
-          setSelectedPost(null);
           const categorySlugs = [
             'technology', 'tech-gossip', 'tutorials', 'computer-programming', 'python',
             'contemporary', 'artificial-intelligence', 'experience', 'data-science',
@@ -678,17 +837,16 @@ export default function BlogHome() {
             'marketing', 'blogging', 'trends', 'learn-with-digital'
           ];
           if (categorySlugs.includes(viewId)) {
-            setActiveCategory(viewId);
-            setActiveSubcategory('all');
-            setCategoryPage(1);
-            setCurrentView('category');
+            navigateTo('category', {
+              category: viewId,
+              subcategory: 'all',
+              page: 1,
+            });
           } else if (viewId === 'search') {
-            setSearchPageQuery('');
-            setCurrentView('search');
+            navigateTo('search', { searchQuery: '' });
           } else {
-            setCurrentView(viewId);
+            navigateTo(viewId);
           }
-          window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         openAdmin={() => {}}
       />
@@ -700,9 +858,7 @@ export default function BlogHome() {
         posts={posts}
         onSelectPost={handleSelectPost}
         onViewAll={(q) => {
-          setSearchPageQuery(q);
-          setCurrentView('search');
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+          navigateTo('search', { searchQuery: q });
         }}
       />
 

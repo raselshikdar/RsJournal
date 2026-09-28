@@ -29,6 +29,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'rasel.dev.bd',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
   transpilePackages: ['motion'],

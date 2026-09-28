@@ -217,7 +217,7 @@ export function Footer({ onNavigate }: FooterProps) {
               onClick={() => onNavigate('home')}
               className="mag-logo text-left cursor-pointer"
             >
-              <span>সোহানুর</span>&nbsp;<b>রহমান</b>
+              <span>রাসেল</span>&nbsp;<b>শিকদার</b>
               <span className="text-xs font-bold text-[var(--accent)] ml-1.5 uppercase tracking-widest hidden sm:inline-block">
                 জার্নাল
               </span>
@@ -347,7 +347,7 @@ export function Footer({ onNavigate }: FooterProps) {
             <ul className="space-y-2.5 text-[15px] sm:text-base font-medium text-[var(--muted)]">
               <li>
                 <a
-                  href="mailto:suhanurrahman.r@gmail.com"
+                  href="mailto:info@rasel.dev.bd"
                   className="hover:text-[var(--accent)] transition-colors flex items-center gap-1.5"
                 >
                   <span>Email</span>
@@ -365,7 +365,7 @@ export function Footer({ onNavigate }: FooterProps) {
               </li>
               <li>
                 <a
-                  href="https://suhanurrahman.com"
+                  href="https://rasel.dev.bd"
                   target="_blank"
                   rel="noreferrer"
                   className="hover:text-[var(--accent)] transition-colors flex items-center gap-1.5"
@@ -376,12 +376,12 @@ export function Footer({ onNavigate }: FooterProps) {
               </li>
               <li>
                 <a
-                  href="https://suhanurrahman.com/contact/"
+                  href="https://github.com/raselshikdar"
                   target="_blank"
                   rel="noreferrer"
                   className="hover:text-[var(--accent)] transition-colors flex items-center gap-1.5"
                 >
-                  <span>Contact</span>
+                  <span>GitHub</span>
                   <span className="text-sm">↗</span>
                 </a>
               </li>
@@ -391,8 +391,8 @@ export function Footer({ onNavigate }: FooterProps) {
         </div>
 
         {/* Footer Bottom Bar */}
-        <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-[var(--muted)] font-medium">
-          <span>© {currentYear} সোহানুর রহমান</span>
+        <div className="!mt-4 pt-1 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-[var(--muted)] font-medium">
+          <span>© {currentYear} রাসেল শিকদার</span>
           <span>Independent journal · Bangladesh</span>
         </div>
 
