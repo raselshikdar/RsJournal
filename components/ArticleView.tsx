@@ -388,6 +388,34 @@ export function ArticleView({ post, onBack, allPosts, onSelectPost }: ArticleVie
         return;
       }
 
+      // Inline image support: ![caption](url)
+      const imgMatch = trimmed.match(/^!\[(.*?)\]\((.*?)\)$/);
+      if (imgMatch) {
+        const alt = imgMatch[1];
+        const src = imgMatch[2];
+        elements.push(
+          <figure key={index} className="my-8">
+            <div 
+              className="relative overflow-hidden rounded-xl border border-[var(--line-2)] bg-[var(--bg-2)] cursor-pointer group shadow-sm"
+              onClick={() => setLightboxImage(src)}
+            >
+              <img 
+                src={src} 
+                alt={alt || 'আর্টিকেল চিত্র'} 
+                className="w-full h-auto object-cover max-h-[550px] mx-auto group-hover:scale-[1.01] transition-transform duration-300" 
+                loading="lazy"
+              />
+            </div>
+            {alt && (
+              <figcaption className="text-center text-xs text-[var(--muted)] mt-2 italic font-sans">
+                {alt}
+              </figcaption>
+            )}
+          </figure>
+        );
+        return;
+      }
+
       if (trimmed.length > 0) {
         elements.push(
           <p key={index} className="mb-6 leading-[1.95] text-[var(--fg)] text-[17.5px] sm:text-[18.5px]">

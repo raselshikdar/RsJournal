@@ -1,76 +1,105 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%">
   <defs>
-    <!-- Background Gradient: Deep Slate to Obsidian with subtle rich emerald/crimson undertone -->
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#12131a" />
-      <stop offset="100%" stop-color="#08090d" />
+    <!-- Background Gradient: Obsidian Slate with rich depth -->
+    <linearGradient id="rsBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#141724" />
+      <stop offset="50%" stop-color="#0e1019" />
+      <stop offset="100%" stop-color="#07080d" />
     </linearGradient>
 
-    <!-- Accent Journal Quill/Pen Gradient: Vibrant Crimson to Coral -->
-    <linearGradient id="quillGrad" x1="0%" y1="100%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#e11d2a" />
-      <stop offset="50%" stop-color="#ff3b47" />
-      <stop offset="100%" stop-color="#ff7b83" />
+    <!-- Outer Border Glow -->
+    <linearGradient id="rsBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d92b2b" stop-opacity="0.8" />
+      <stop offset="50%" stop-color="#f59e0b" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#10b981" stop-opacity="0.5" />
     </linearGradient>
 
-    <!-- Golden Nib Spark Gradient -->
-    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#fbbf24" />
-      <stop offset="100%" stop-color="#d97706" />
+    <!-- Gold Fountain Nib Gradient -->
+    <linearGradient id="goldNib" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="35%" stop-color="#f59e0b" />
+      <stop offset="70%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#b45309" />
     </linearGradient>
 
-    <!-- Subtle Inner Border Glow -->
-    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22" />
-      <stop offset="100%" stop-color="#e11d2a" stop-opacity="0.35" />
+    <!-- Crimson Journal Accent Gradient -->
+    <linearGradient id="crimsonAccent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff4d4d" />
+      <stop offset="100%" stop-color="#b91c1c" />
     </linearGradient>
 
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="2.5" result="blur" />
+    <!-- Page White Gradient -->
+    <linearGradient id="pageGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#e2e8f0" />
+    </linearGradient>
+
+    <filter id="subtleGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur" />
       <feComposite in="SourceGraphic" in2="blur" operator="over" />
     </filter>
   </defs>
 
-  <!-- Base Rounded Icon Container -->
-  <rect width="100" height="100" rx="24" fill="url(#bgGrad)" />
-  <rect x="1" y="1" width="98" height="98" rx="23" fill="none" stroke="url(#borderGrad)" stroke-width="1.8" />
+  <!-- Container Squircle -->
+  <rect width="128" height="128" rx="30" fill="url(#rsBg)" />
+  <rect x="2" y="2" width="124" height="124" rx="28" fill="none" stroke="url(#rsBorder)" stroke-width="2.5" />
 
-  <!-- Journal Pages Silhouette (Open Book / Journal) -->
-  <g transform="translate(18, 22)">
-    <!-- Left Leaf -->
-    <path d="M 32 46 C 22 43 8 45 4 48 L 4 14 C 9 11 22 10 32 13 Z" fill="#ffffff" fill-opacity="0.08" stroke="#ffffff" stroke-opacity="0.2" stroke-width="1.2" stroke-linejoin="round" />
-    <!-- Right Leaf -->
-    <path d="M 32 46 C 42 43 56 45 60 48 L 60 14 C 55 11 42 10 32 13 Z" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-opacity="0.25" stroke-width="1.2" stroke-linejoin="round" />
-    <!-- Spine Line -->
-    <line x1="32" y1="13" x2="32" y2="46" stroke="#ffffff" stroke-opacity="0.3" stroke-width="1.5" stroke-linecap="round" />
+  <!-- Journal Book Base Shadow & Structure -->
+  <g transform="translate(18, 38)">
+    <!-- Back Spine Shadow -->
+    <path d="M 46 64 C 30 60 12 62 4 66 L 4 22 C 14 18 30 17 46 22 C 62 17 78 18 88 22 L 88 66 C 80 62 62 60 46 64 Z" fill="#000000" fill-opacity="0.4" />
+
+    <!-- Left Open Page -->
+    <path d="M 46 60 C 32 56 14 58 6 62 L 6 18 C 16 14 32 13 46 18 Z" fill="url(#pageGrad)" fill-opacity="0.95" />
+    <!-- Left Page Subtle Text Lines -->
+    <line x1="14" y1="26" x2="38" y2="26" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" opacity="0.6" />
+    <line x1="14" y1="34" x2="38" y2="34" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" opacity="0.6" />
+    <line x1="14" y1="42" x2="32" y2="42" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" opacity="0.6" />
+    <line x1="14" y1="50" x2="35" y2="50" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" opacity="0.6" />
+
+    <!-- Right Open Page -->
+    <path d="M 46 60 C 60 56 78 58 86 62 L 86 18 C 76 14 60 13 46 18 Z" fill="url(#pageGrad)" fill-opacity="0.9" />
+    <!-- Right Page Subtle Text Lines -->
+    <line x1="54" y1="26" x2="78" y2="26" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" opacity="0.6" />
+    <line x1="54" y1="34" x2="78" y2="34" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" opacity="0.6" />
+    <line x1="54" y1="42" x2="72" y2="42" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" opacity="0.6" />
+    <line x1="54" y1="50" x2="75" y2="50" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" opacity="0.6" />
+
+    <!-- Book Spine Fold -->
+    <line x1="46" y1="18" x2="46" y2="60" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" />
+  </g>
+
+  <!-- Editorial Fountain Pen Nib (Centered, Dominant & Crisp) -->
+  <g transform="translate(64, 46) rotate(0)" filter="url(#subtleGlow)">
+    <!-- Nib Upper Blade / Body -->
+    <path d="M 0 -34 C 10 -34 14 -18 14 -6 L 14 8 L 0 30 L -14 8 L -14 -6 C -14 -18 -10 -34 0 -34 Z" fill="url(#goldNib)" />
     
-    <!-- Journal Lines on Right Page -->
-    <line x1="37" y1="19" x2="54" y2="19" stroke="#ffffff" stroke-opacity="0.2" stroke-width="1.2" stroke-linecap="round" />
-    <line x1="37" y1="25" x2="52" y2="25" stroke="#ffffff" stroke-opacity="0.2" stroke-width="1.2" stroke-linecap="round" />
-    <line x1="37" y1="31" x2="48" y2="31" stroke="#ffffff" stroke-opacity="0.2" stroke-width="1.2" stroke-linecap="round" />
+    <!-- Pen Collar / Grip Band -->
+    <rect x="-14" y="-34" width="28" height="6" rx="2" fill="url(#crimsonAccent)" />
 
-    <!-- Journal Lines on Left Page -->
-    <line x1="10" y1="19" x2="27" y2="19" stroke="#ffffff" stroke-opacity="0.15" stroke-width="1.2" stroke-linecap="round" />
-    <line x1="12" y1="25" x2="27" y2="25" stroke="#ffffff" stroke-opacity="0.15" stroke-width="1.2" stroke-linecap="round" />
+    <!-- Golden Nib Shoulders Accent -->
+    <path d="M 0 30 L 7 12 L -7 12 Z" fill="#fef08a" opacity="0.8" />
+
+    <!-- Nib Breather Hole & Ink Slit -->
+    <circle cx="0" cy="6" r="2.8" fill="#141724" />
+    <line x1="0" y1="6" x2="0" y2="30" stroke="#141724" stroke-width="1.8" stroke-linecap="round" />
+
+    <!-- Side Nib Wings -->
+    <line x1="-12" y1="-4" x2="-3" y2="8" stroke="#fef08a" stroke-width="1.2" opacity="0.6" />
+    <line x1="12" y1="-4" x2="3" y2="8" stroke="#78350f" stroke-width="1.2" opacity="0.5" />
   </g>
 
-  <!-- Editorial Fountain Pen / Nib representing Journal Craft -->
-  <g transform="translate(43, 16) rotate(16)" filter="url(#glow)">
-    <!-- Pen Body / Quill Blade -->
-    <path d="M 14 0 C 18 10 21 24 18 36 L 10 47 L 2 36 C -1 24 2 10 6 0 Z" fill="url(#quillGrad)" />
-    <!-- Pen Collar -->
-    <path d="M 5 26 L 15 26 L 14 34 L 6 34 Z" fill="url(#goldGrad)" opacity="0.9" />
-    <!-- Golden Nib Point -->
-    <path d="M 6 34 L 14 34 L 10 47 Z" fill="url(#goldGrad)" />
-    <!-- Ink Slit -->
-    <line x1="10" y1="31" x2="10" y2="44" stroke="#12131a" stroke-width="1.2" stroke-linecap="round" />
-    <!-- Breather Hole -->
-    <circle cx="10" cy="30" r="1.4" fill="#12131a" />
+  <!-- Dynamic Ink Point Spark / Star of Wisdom -->
+  <g transform="translate(64, 82)">
+    <!-- Flowing Red Ink Curve -->
+    <path d="M 0 -6 Q 12 0 20 -4 Q 28 -8 38 -2" fill="none" stroke="url(#crimsonAccent)" stroke-width="3" stroke-linecap="round" />
+    <circle cx="0" cy="-6" r="3.2" fill="#d92b2b" />
+    <circle cx="0" cy="-6" r="1.5" fill="#ffffff" />
   </g>
 
-  <!-- Sparkling Ink Star / Knowledge Spark -->
-  <g transform="translate(68, 62)">
-    <path d="M 8 0 Q 8 8 16 8 Q 8 8 8 16 Q 8 8 0 8 Q 8 8 8 0 Z" fill="#fbbf24" opacity="0.9" />
-    <circle cx="8" cy="8" r="1.5" fill="#ffffff" />
+  <!-- Little Golden Spark in upper right corner -->
+  <g transform="translate(94, 22)">
+    <path d="M 6 0 Q 6 6 12 6 Q 6 6 6 12 Q 6 6 0 6 Q 6 6 6 0 Z" fill="#fbbf24" />
+    <circle cx="6" cy="6" r="1.5" fill="#ffffff" />
   </g>
 </svg>

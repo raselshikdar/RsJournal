@@ -17,9 +17,11 @@ interface AuthContextType {
   isAdmin: boolean;
   loading: boolean;
   loginWithGoogle: () => Promise<void>;
+  loginWithCredentials: (identifier: string, pass: string) => Promise<boolean>;
   logout: () => Promise<void>;
   isDemoAdmin: boolean;
   toggleDemoAdmin: () => void;
+  adminEmail: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,6 +30,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDemoAdmin, setIsDemoAdmin] = useState(false);
+  const [isCredentialAdmin, setIsCredentialAdmin] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return localStorage.getItem('rs_admin_session') === 'active_authenticated';
+    } catch {
+      return false;
+    }
+  });
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -38,6 +48,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => unsubscribe();
   }, []);
+
+  const loginWithCredentials = async (identifier: string, pass: string): Promise<boolean> => {
+    const cleanId = identifier.trim().toLowerCase();
+    const cleanPass = pass.trim();
+
+    // Check custom saved admin password or default
+    let masterPassword = 'admin@rasel2025';
+    try {
+      const customPwd = localStorage.getItem('rs_admin_master_pwd');
+      if (customPwd) masterPassword = customPwd;
+    } catch {}
+
+    const validIdentifiers = [
+      'admin@rasel.dev.bd',
+      'rsblog597@gmail.com',
+      'rasel',
+      'admin',
+      ADMIN_EMAIL.toLowerCase(),
+    ];
+
+    if (validIdentifiers.includes(cleanId) && cleanPass === masterPassword) {
+      setIsCredentialAdmin(true);
+      try {
+        localStorage.setItem('rs_admin_session', 'active_authenticated');
+        localStorage.setItem('rs_admin_logged_id', cleanId);
+      } catch {}
+      showToast('অ্যাডমিন ক্রিডেনশিয়াল দিয়ে সফলভাবে লগইন করেছেন!', 'success');
+      return true;
+    }
+
+    showToast('ভুল ইউজারনেম/ইমেইল অথবা পাসওয়ার্ড। অনুগ্রহ করে সঠিক তথ্য দিন।', 'error');
+    return false;
+  };
 
   const loginWithGoogle = async () => {
     try {
@@ -56,12 +99,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     try {
       await signOut(auth);
-      setIsDemoAdmin(false);
-      showToast('লগআউট সম্পন্ন হয়েছে।', 'info');
-    } catch (error: unknown) {
-      console.error('Logout error:', error);
-      showToast('লগআউট করার সময় সমস্যা হয়েছে।', 'error');
-    }
+    } catch {}
+    setIsDemoAdmin(false);
+    setIsCredentialAdmin(false);
+    try {
+      localStorage.removeItem('rs_admin_session');
+      localStorage.removeItem('rs_admin_logged_id');
+    } catch {}
+    showToast('অ্যাডমিন লগআউট সম্পন্ন হয়েছে।', 'info');
   };
 
   const toggleDemoAdmin = () => {
@@ -75,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const isAdmin = (user?.email === ADMIN_EMAIL) || isDemoAdmin;
+  const isAdmin = (user?.email === ADMIN_EMAIL) || isDemoAdmin || isCredentialAdmin;
 
   return (
     <AuthContext.Provider
@@ -84,9 +129,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAdmin,
         loading,
         loginWithGoogle,
+        loginWithCredentials,
         logout,
         isDemoAdmin,
         toggleDemoAdmin,
+        adminEmail: ADMIN_EMAIL,
       }}
     >
       {children}

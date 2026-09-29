@@ -194,15 +194,18 @@ export function Navbar({ currentView, setCurrentView, openSearch, onSelectCatego
             <button
               type="button"
               className="mag-icon-btn"
-              aria-label="Toggle theme"
+              aria-label="থিম পরিবর্তন করুন"
               onClick={toggleTheme}
-              title={mounted && theme === 'dark' ? 'লাইট মোড চালু করুন' : 'ডার্ক মোড চালু করুন'}
+              title="থিম পরিবর্তন করুন"
+              suppressHydrationWarning
             >
-              {mounted && theme === 'dark' ? (
-                <Sun size={18} strokeWidth={1.9} className="text-amber-400" />
-              ) : (
-                <Moon size={18} strokeWidth={1.9} />
-              )}
+              <span suppressHydrationWarning className="inline-flex items-center justify-center">
+                {mounted && theme === 'dark' ? (
+                  <Sun size={18} strokeWidth={1.9} className="text-amber-400" />
+                ) : (
+                  <Moon size={18} strokeWidth={1.9} />
+                )}
+              </span>
             </button>
           </div>
 

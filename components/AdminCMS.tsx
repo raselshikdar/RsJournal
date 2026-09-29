@@ -238,7 +238,7 @@ export function AdminCMS({ isOpen, onClose, posts, setPosts, onViewPost }: Admin
       coverImage: formCoverImage.trim() || 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1200&auto=format&fit=crop&q=80',
       content: formContent.trim(),
       authorId: user?.uid || 'admin-author',
-      authorName: user?.displayName || 'রাকিবুল হাসান (RS)',
+      authorName: user?.displayName || 'রাসেল শিকদার (Rasel Shikdar)',
       authorEmail: user?.email || 'rsblog597@gmail.com',
       authorAvatar: user?.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
       readingTimeMinutes,
