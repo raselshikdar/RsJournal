@@ -13,6 +13,12 @@ permissions:
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
+
+    # `if` কন্ডিশনে সিক্রেট ব্যবহারের সুবিধার্থে জব লেভেলে env ঘোষণা করা হয়েছে
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BDFORUM247 }}
+      FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -39,7 +45,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
       - name: Deploy to Firebase Hosting (via Service Account)
-        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BDFORUM247 != '' }}
+        if: ${{ env.FIREBASE_SA != '' }}
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
@@ -50,14 +56,14 @@ jobs:
           FIREBASE_CLI_EXPERIMENTS: webframeworks
 
       - name: Deploy Firestore Rules (via Service Account)
-        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BDFORUM247 != '' }}
+        if: ${{ env.FIREBASE_SA != '' }}
         run: |
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_BDFORUM247 }}' > /tmp/sa.json
           GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json npx firebase-tools deploy --only firestore:rules --project bdforum247 || true
           rm -f /tmp/sa.json
 
       - name: Deploy to Firebase (via Token Fallback)
-        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BDFORUM247 == '' && secrets.FIREBASE_TOKEN != '' }}
+        if: ${{ env.FIREBASE_SA == '' && env.FIREBASE_TOKEN != '' }}
         run: |
           npx firebase-tools deploy --only hosting,firestore:rules --token "${{ secrets.FIREBASE_TOKEN }}" --project bdforum247
         env:
