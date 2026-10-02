@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "bdforum247",
     "source": ".",
     "ignore": [
       "firebase.json",

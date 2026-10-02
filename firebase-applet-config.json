@@ -3,6 +3,7 @@
   "appId": "1:520666182796:web:2c2442813a778c244bf7a9",
   "apiKey": "AIzaSyB0wRuoTvaCMo8b7ysG8ozVLWLzq_vUddo",
   "authDomain": "bdforum247.firebaseapp.com",
+  "databaseURL": "https://bdforum247-default-rtdb.firebaseio.com",
   "firestoreDatabaseId": "ai-studio-6e3e650c-f228-4bb2-abf3-4883df01d45e",
   "storageBucket": "bdforum247.appspot.com",
   "messagingSenderId": "520666182796",

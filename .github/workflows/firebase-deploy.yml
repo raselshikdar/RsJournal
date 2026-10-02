@@ -9,16 +9,11 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
-
-    # `if` কন্ডিশনে সিক্রেট ব্যবহারের সুবিধার্থে জব লেভেলে env ঘোষণা করা হয়েছে
-    env:
-      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BDFORUM247 }}
-      FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -44,27 +39,26 @@ jobs:
           NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL || 'https://rasel.dev.bd' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
-      - name: Deploy to Firebase Hosting (via Service Account)
-        if: ${{ env.FIREBASE_SA != '' }}
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_BDFORUM247 }}'
-          channelId: live
-          projectId: bdforum247
-        env:
-          FIREBASE_CLI_EXPERIMENTS: webframeworks
-
-      - name: Deploy Firestore Rules (via Service Account)
-        if: ${{ env.FIREBASE_SA != '' }}
+      - name: Deploy to Firebase Hosting & Firestore
         run: |
-          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_BDFORUM247 }}' > /tmp/sa.json
-          GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json npx firebase-tools deploy --only firestore:rules --project bdforum247 || true
-          rm -f /tmp/sa.json
+          # Detect available credentials
+          SA_KEY="${{ secrets.FIREBASE_SERVICE_ACCOUNT_BDFORUM247 || secrets.FIREBASE_SERVICE_ACCOUNT || secrets.GCP_SA_KEY }}"
+          FB_TOKEN="${{ secrets.FIREBASE_TOKEN }}"
 
-      - name: Deploy to Firebase (via Token Fallback)
-        if: ${{ env.FIREBASE_SA == '' && env.FIREBASE_TOKEN != '' }}
-        run: |
-          npx firebase-tools deploy --only hosting,firestore:rules --token "${{ secrets.FIREBASE_TOKEN }}" --project bdforum247
+          if [ -n "$SA_KEY" ]; then
+            echo "🔑 Authenticating via Google Service Account..."
+            echo "$SA_KEY" > /tmp/firebase-service-account.json
+            export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-service-account.json
+            npx firebase-tools deploy --only hosting,firestore:rules --project bdforum247 --non-interactive
+            rm -f /tmp/firebase-service-account.json
+          elif [ -n "$FB_TOKEN" ]; then
+            echo "🔑 Authenticating via Firebase CI Token..."
+            npx firebase-tools deploy --only hosting,firestore:rules --token "$FB_TOKEN" --project bdforum247 --non-interactive
+          else
+            echo "::error::❌ No Firebase credentials found in GitHub Secrets!"
+            echo "::error::Please go to GitHub Repository -> Settings -> Secrets and variables -> Actions"
+            echo "::error::And add 'FIREBASE_SERVICE_ACCOUNT_BDFORUM247' (Service Account JSON) or 'FIREBASE_TOKEN' (firebase login:ci token)."
+            exit 1
+          fi
         env:
           FIREBASE_CLI_EXPERIMENTS: webframeworks
