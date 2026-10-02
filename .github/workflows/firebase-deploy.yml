@@ -39,26 +39,14 @@ jobs:
           NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL || 'https://rasel.dev.bd' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
+      - name: Authenticate to Google Cloud via Workload Identity Federation (OIDC)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER || vars.WIF_PROVIDER || 'projects/520666182796/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider' }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT || vars.WIF_SERVICE_ACCOUNT || 'github-actions-deployer@bdforum247.iam.gserviceaccount.com' }}
+
       - name: Deploy to Firebase Hosting & Firestore
         run: |
-          # Detect available credentials
-          SA_KEY="${{ secrets.FIREBASE_SERVICE_ACCOUNT_BDFORUM247 || secrets.FIREBASE_SERVICE_ACCOUNT || secrets.GCP_SA_KEY }}"
-          FB_TOKEN="${{ secrets.FIREBASE_TOKEN }}"
-
-          if [ -n "$SA_KEY" ]; then
-            echo "🔑 Authenticating via Google Service Account..."
-            echo "$SA_KEY" > /tmp/firebase-service-account.json
-            export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-service-account.json
-            npx firebase-tools deploy --only hosting,firestore:rules --project bdforum247 --non-interactive
-            rm -f /tmp/firebase-service-account.json
-          elif [ -n "$FB_TOKEN" ]; then
-            echo "🔑 Authenticating via Firebase CI Token..."
-            npx firebase-tools deploy --only hosting,firestore:rules --token "$FB_TOKEN" --project bdforum247 --non-interactive
-          else
-            echo "::error::❌ No Firebase credentials found in GitHub Secrets!"
-            echo "::error::Please go to GitHub Repository -> Settings -> Secrets and variables -> Actions"
-            echo "::error::And add 'FIREBASE_SERVICE_ACCOUNT_BDFORUM247' (Service Account JSON) or 'FIREBASE_TOKEN' (firebase login:ci token)."
-            exit 1
-          fi
+          npx firebase-tools deploy --only hosting,firestore:rules --project bdforum247 --non-interactive
         env:
           FIREBASE_CLI_EXPERIMENTS: webframeworks
