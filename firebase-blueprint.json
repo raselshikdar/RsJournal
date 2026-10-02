@@ -24,6 +24,7 @@
         "viewsCount": { "type": "number" },
         "likesCount": { "type": "number" },
         "published": { "type": "boolean" },
+        "isFeatured": { "type": "boolean" },
         "seoTitle": { "type": "string", "maxLength": 150 },
         "seoDescription": { "type": "string", "maxLength": 300 },
         "seoKeywords": { "type": "string", "maxLength": 300 },

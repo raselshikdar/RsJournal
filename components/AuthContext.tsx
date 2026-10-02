@@ -5,6 +5,7 @@ import {
   auth, 
   googleProvider, 
   signInWithPopup, 
+  signInAnonymously,
   signOut, 
   onAuthStateChanged,
   ADMIN_EMAIL,
@@ -19,8 +20,6 @@ interface AuthContextType {
   loginWithGoogle: () => Promise<void>;
   loginWithCredentials: (identifier: string, pass: string) => Promise<boolean>;
   logout: () => Promise<void>;
-  isDemoAdmin: boolean;
-  toggleDemoAdmin: () => void;
   adminEmail: string;
 }
 
@@ -29,7 +28,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isDemoAdmin, setIsDemoAdmin] = useState(false);
   const [isCredentialAdmin, setIsCredentialAdmin] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     try {
@@ -53,32 +51,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const cleanId = identifier.trim().toLowerCase();
     const cleanPass = pass.trim();
 
-    // Check custom saved admin password or default
+    // Check custom saved admin password or default master password
     let masterPassword = 'admin@rasel2025';
     try {
       const customPwd = localStorage.getItem('rs_admin_master_pwd');
       if (customPwd) masterPassword = customPwd;
     } catch {}
 
-    const validIdentifiers = [
-      'admin@rasel.dev.bd',
-      'rsblog597@gmail.com',
-      'rasel',
-      'admin',
-      ADMIN_EMAIL.toLowerCase(),
-    ];
+    // Strictly only the authorized administrator's email is permitted
+    const isAuthorizedEmail = cleanId === ADMIN_EMAIL.toLowerCase() || cleanId === 'rsblog597@gmail.com';
 
-    if (validIdentifiers.includes(cleanId) && cleanPass === masterPassword) {
+    if (isAuthorizedEmail && cleanPass === masterPassword) {
       setIsCredentialAdmin(true);
       try {
         localStorage.setItem('rs_admin_session', 'active_authenticated');
         localStorage.setItem('rs_admin_logged_id', cleanId);
       } catch {}
-      showToast('অ্যাডমিন ক্রিডেনশিয়াল দিয়ে সফলভাবে লগইন করেছেন!', 'success');
+
+      // Ensure Firebase session is active for Firestore operations
+      try {
+        if (!auth.currentUser) {
+          await signInAnonymously(auth);
+        }
+      } catch (authErr) {
+        console.warn('Firebase auth session note:', authErr);
+      }
+
+      showToast('অ্যাডমিন সফলভাবে লগইন করেছেন!', 'success');
       return true;
     }
 
-    showToast('ভুল ইউজারনেম/ইমেইল অথবা পাসওয়ার্ড। অনুগ্রহ করে সঠিক তথ্য দিন।', 'error');
+    showToast('ভুল ইউজারনেম/ইমেইল অথবা পাসওয়ার্ড। প্রবেশাধিকার অস্বীকৃত।', 'error');
     return false;
   };
 
@@ -88,11 +91,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (result.user.email === ADMIN_EMAIL) {
         showToast('অ্যাডমিন হিসেবে সফলভাবে লগইন করেছেন!', 'success');
       } else {
-        showToast(`স্বাগতম, ${result.user.displayName || 'ব্যবহারকারী'}!`, 'success');
+        showToast('অননুমোদিত অ্যাকাউন্ট। শুধুমাত্র অ্যাডমিন লগইন করতে পারবেন।', 'error');
       }
     } catch (error: unknown) {
-      console.error('Google Sign-In Error:', error);
-      showToast('লগইন ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।', 'error');
+      const firebaseError = error as { code?: string; message?: string };
+      // User closed the popup window voluntarily or another popup was opened
+      if (
+        firebaseError?.code === 'auth/popup-closed-by-user' ||
+        firebaseError?.code === 'auth/cancelled-popup-request'
+      ) {
+        showToast('লগইন উইন্ডো বন্ধ করা হয়েছে।', 'info');
+        return;
+      }
+      
+      if (firebaseError?.code === 'auth/popup-blocked') {
+        showToast('ব্রাউজারের পপ-আপ ব্লকার সক্রিয় আছে। অনুগ্রহ করে পপ-আপ উইন্ডো অ্যালাউ করুন।', 'info');
+        return;
+      }
+
+      console.warn('Google Sign-In Notice:', firebaseError?.message || error);
+      showToast('লগইন সম্পন্ন করা যায়নি। অনুগ্রহ করে আবার চেষ্টা করুন।', 'error');
     }
   };
 
@@ -100,7 +118,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await signOut(auth);
     } catch {}
-    setIsDemoAdmin(false);
     setIsCredentialAdmin(false);
     try {
       localStorage.removeItem('rs_admin_session');
@@ -109,18 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     showToast('অ্যাডমিন লগআউট সম্পন্ন হয়েছে।', 'info');
   };
 
-  const toggleDemoAdmin = () => {
-    setIsDemoAdmin((prev) => {
-      const next = !prev;
-      showToast(
-        next ? 'ডেমো অ্যাডমিন মোড সক্রিয় হয়েছে!' : 'ডেমো অ্যাডমিন মোড নিষ্ক্রিয় হয়েছে।',
-        'info'
-      );
-      return next;
-    });
-  };
-
-  const isAdmin = (user?.email === ADMIN_EMAIL) || isDemoAdmin || isCredentialAdmin;
+  const isAdmin = (user?.email === ADMIN_EMAIL) || isCredentialAdmin;
 
   return (
     <AuthContext.Provider
@@ -131,8 +137,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loginWithGoogle,
         loginWithCredentials,
         logout,
-        isDemoAdmin,
-        toggleDemoAdmin,
         adminEmail: ADMIN_EMAIL,
       }}
     >

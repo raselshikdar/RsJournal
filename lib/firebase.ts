@@ -5,6 +5,7 @@ import {
   signInWithPopup, 
   signOut, 
   onAuthStateChanged,
+  signInAnonymously,
   type User 
 } from 'firebase/auth';
 import { 
@@ -108,6 +109,7 @@ export async function testConnection(): Promise<boolean> {
 
 export {
   signInWithPopup,
+  signInAnonymously,
   signOut,
   onAuthStateChanged,
   doc,

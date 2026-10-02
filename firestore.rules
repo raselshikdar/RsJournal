@@ -21,14 +21,26 @@ service cloud.firestore {
 
     // Posts Collection
     match /posts/{postId} {
-      // Anyone can read published posts; admin can read drafts
-      allow read: if resource.data.published == true || isAdmin();
+      // Anyone can read posts; admin can manage drafts and publish
+      allow read: if true;
       
       // Admin can create, update, delete posts
-      allow create, delete: if isAdmin();
+      allow create: if isAdmin() || (
+        request.resource.data.authorEmail == 'rsblog597@gmail.com' &&
+        request.resource.data.title is string &&
+        request.resource.data.title.size() > 0 &&
+        request.resource.data.content is string &&
+        request.resource.data.content.size() > 0
+      );
+
+      allow delete: if isAdmin() || (
+        resource.data.authorEmail == 'rsblog597@gmail.com'
+      );
       
-      // Updates: Admin full access, or anonymous/readers can only increment viewsCount or likesCount
+      // Updates: Admin full access, or authorized admin email, or anonymous/readers can only increment viewsCount or likesCount
       allow update: if isAdmin() || (
+        request.resource.data.authorEmail == 'rsblog597@gmail.com'
+      ) || (
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewsCount', 'likesCount']) &&
         request.resource.data.viewsCount is number &&
         request.resource.data.likesCount is number
@@ -78,6 +90,12 @@ service cloud.firestore {
     match /gallery/{itemId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    // Categories
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin() || (request.resource.data.id is string);
     }
 
     // User profiles

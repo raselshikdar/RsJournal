@@ -52,7 +52,7 @@ interface AdminCMSProps {
 }
 
 export function AdminCMS({ isOpen, onClose, posts, setPosts, onViewPost }: AdminCMSProps) {
-  const { user, isAdmin, loginWithGoogle, logout, isDemoAdmin, toggleDemoAdmin } = useAuth();
+  const { user, isAdmin, loginWithGoogle, logout } = useAuth();
   const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'posts' | 'editor' | 'comments' | 'messages' | 'subscribers'>('overview');
@@ -335,11 +335,6 @@ export function AdminCMS({ isOpen, onClose, posts, setPosts, onViewPost }: Admin
             <div>
               <h2 className="font-bold text-sm sm:text-base text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                 সিএমএস ড্যাশবোর্ড ও কনটেন্ট হাব
-                {isDemoAdmin && (
-                  <span className="text-[10px] bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 px-1.5 py-0.5 rounded font-medium">
-                    ডেমো মোড
-                  </span>
-                )}
               </h2>
               <p className="text-[11px] text-zinc-500">
                 {user ? `লগইন আছেন: ${user.email}` : 'অ্যাডমিন স্ট্যাটাস: অ্যাক্সেসযোগ্য'}
@@ -449,13 +444,6 @@ export function AdminCMS({ isOpen, onClose, posts, setPosts, onViewPost }: Admin
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>নতুন ব্লগ পোস্ট লিখুন</span>
-                  </button>
-
-                  <button
-                    onClick={toggleDemoAdmin}
-                    className="h-9 px-3.5 border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-md text-xs font-medium hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
-                  >
-                    {isDemoAdmin ? 'ডেমো অ্যাডমিন বন্ধ করুন' : 'ডেমো মোড টেস্ট করুন'}
                   </button>
                 </div>
               </div>

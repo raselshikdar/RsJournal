@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Star } from 'lucide-react';
 import { Post, BLOG_CATEGORIES } from '../lib/types';
 import { INITIAL_POSTS, INITIAL_GALLERY } from '../lib/sample-data';
 import { db, collection, onSnapshot, testConnection } from '../lib/firebase';
@@ -97,7 +97,20 @@ const CATEGORY_MAP: Record<string, {
 export default function BlogHome() {
   const [currentView, setCurrentView] = useState<string>('home');
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
-  const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
+  const [posts, setPosts] = useState<Post[]>(() => {
+    if (typeof window === 'undefined') return INITIAL_POSTS;
+    try {
+      const saved = localStorage.getItem('rs_custom_posts');
+      const deleted: string[] = JSON.parse(localStorage.getItem('rs_deleted_posts') || '[]');
+      const localList: Post[] = saved ? JSON.parse(saved) : [];
+      const map = new Map<string, Post>();
+      INITIAL_POSTS.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
+      localList.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
+      return Array.from(map.values());
+    } catch {
+      return INITIAL_POSTS;
+    }
+  });
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [activeSubcategory, setActiveSubcategory] = useState<string>('all');
   const [categoryPage, setCategoryPage] = useState<number>(1);
@@ -275,15 +288,40 @@ export default function BlogHome() {
 
     try {
       const postsCol = collection(db, 'posts');
-      const unsubscribe = onSnapshot(postsCol, (snapshot) => {
-        if (!snapshot.empty) {
-          const remotePosts: Post[] = [];
-          snapshot.forEach((docSnap) => {
-            remotePosts.push({ id: docSnap.id, ...docSnap.data() } as Post);
-          });
-          setPosts(remotePosts);
+      const unsubscribe = onSnapshot(
+        postsCol,
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const remotePosts: Post[] = [];
+            snapshot.forEach((docSnap) => {
+              remotePosts.push({ id: docSnap.id, ...docSnap.data() } as Post);
+            });
+
+            let deletedIds: string[] = [];
+            let localCustom: Post[] = [];
+            try {
+              deletedIds = JSON.parse(localStorage.getItem('rs_deleted_posts') || '[]');
+              const saved = localStorage.getItem('rs_custom_posts');
+              if (saved) localCustom = JSON.parse(saved);
+            } catch {}
+
+            const map = new Map<string, Post>();
+            INITIAL_POSTS.filter((p) => !deletedIds.includes(p.id)).forEach((p) => map.set(p.id, p));
+            localCustom.filter((p) => !deletedIds.includes(p.id)).forEach((p) => map.set(p.id, p));
+            remotePosts.filter((p) => !deletedIds.includes(p.id)).forEach((p) => map.set(p.id, p));
+
+            const merged = Array.from(map.values());
+            setPosts(merged);
+
+            try {
+              localStorage.setItem('rs_custom_posts', JSON.stringify(remotePosts));
+            } catch {}
+          }
+        },
+        (error) => {
+          console.warn('Firestore posts listener note:', error?.message || error);
         }
-      }, () => {});
+      );
 
       return () => unsubscribe();
     } catch {
@@ -332,20 +370,24 @@ export default function BlogHome() {
     categoryPage * PAGE_SIZE
   );
 
-  // Hero Lead Story (1st post)
-  const leadPost = publishedPosts[0] || posts[0];
+  // Hero Lead Story: Check if a post is explicitly selected as featured (isFeatured === true), otherwise fallback to latest post
+  const explicitFeaturedPost = publishedPosts.find((p) => p.isFeatured);
+  const leadPost = explicitFeaturedPost || publishedPosts[0] || posts[0];
 
-  // Hero Side Stories (next 4 posts matching blog.suhanurrahman.com)
-  const heroSidePosts = publishedPosts.slice(1, 5);
+  // Hero Side Stories (4 posts excluding the chosen lead post)
+  const heroSidePosts = publishedPosts.filter((p) => p.id !== leadPost?.id).slice(0, 4);
 
-  // Tech gossip posts (Section 2 matching blog.suhanurrahman.com)
-  const techGossipPosts = publishedPosts.filter(
-    (p) => p.category === 'tech-gossip' || p.category === 'technology' || p.category === 'social-media'
-  ).slice(0, 3);
-  const displayTechPosts = techGossipPosts.length > 0 ? techGossipPosts : publishedPosts.slice(1, 4);
+  // Tech gossip posts (Section 2 matching blog.suhanurrahman.com, excluding lead post)
+  const techGossipPosts = publishedPosts
+    .filter((p) => p.id !== leadPost?.id)
+    .filter(
+      (p) => p.category === 'tech-gossip' || p.category === 'technology' || p.category === 'social-media'
+    ).slice(0, 3);
+  const displayTechPosts = techGossipPosts.length > 0 ? techGossipPosts : publishedPosts.filter((p) => p.id !== leadPost?.id).slice(0, 3);
 
-  // Remaining latest posts
-  const latestPosts = publishedPosts.slice(5);
+  // Remaining latest posts excluding leadPost and heroSidePosts
+  const heroSideIds = new Set(heroSidePosts.map((p) => p.id));
+  const latestPosts = publishedPosts.filter((p) => p.id !== leadPost?.id && !heroSideIds.has(p.id));
 
   // Top 4 most read / trending posts
   const trendingPosts = [...posts]
@@ -439,19 +481,27 @@ export default function BlogHome() {
                       />
                     </div>
 
-                    <span
-                      className="mag-chip cursor-pointer"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigateTo('category', {
-                          category: leadPost.category,
-                          subcategory: 'all',
-                          page: 1,
-                        });
-                      }}
-                    >
-                      {getCategoryMeta(leadPost.category).name}
-                    </span>
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <span
+                        className="mag-chip cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigateTo('category', {
+                            category: leadPost.category,
+                            subcategory: 'all',
+                            page: 1,
+                          });
+                        }}
+                      >
+                        {getCategoryMeta(leadPost.category).name}
+                      </span>
+                      {leadPost.isFeatured && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/70 border border-amber-300 dark:border-amber-700/60 px-2 py-0.5 rounded-full shadow-xs">
+                          <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                          বিশেষ পোস্ট
+                        </span>
+                      )}
+                    </div>
 
                     <h1 className="mag-hero-title">
                       <span>{leadPost.title}</span>

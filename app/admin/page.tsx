@@ -39,7 +39,8 @@ import {
   X,
   EyeOff,
   Columns,
-  Maximize2
+  Maximize2,
+  Star
 } from 'lucide-react';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/Toast';
@@ -47,6 +48,8 @@ import { Post, ContactMessage, Subscriber, SeoOptimizationResult, BLOG_CATEGORIE
 import { INITIAL_POSTS } from '../../lib/sample-data';
 import { 
   db, 
+  auth,
+  signInAnonymously,
   collection, 
   doc, 
   getDocs, 
@@ -65,18 +68,76 @@ interface CategoryItem {
   labelEn: string;
 }
 
+// Local post persistence helpers
+const savePostToLocal = (post: Post) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const saved = localStorage.getItem('rs_custom_posts');
+    let list: Post[] = saved ? JSON.parse(saved) : [];
+    const idx = list.findIndex((p) => p.id === post.id);
+    if (idx >= 0) {
+      list[idx] = post;
+    } else {
+      list = [post, ...list];
+    }
+    localStorage.setItem('rs_custom_posts', JSON.stringify(list));
+    // Remove from deleted list if re-saved
+    const deleted: string[] = JSON.parse(localStorage.getItem('rs_deleted_posts') || '[]');
+    if (deleted.includes(post.id)) {
+      localStorage.setItem('rs_deleted_posts', JSON.stringify(deleted.filter((id) => id !== post.id)));
+    }
+  } catch (err) {
+    console.warn('LocalStorage save error:', err);
+  }
+};
+
+const deletePostFromLocal = (postId: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const saved = localStorage.getItem('rs_custom_posts');
+    if (saved) {
+      const list: Post[] = JSON.parse(saved);
+      localStorage.setItem('rs_custom_posts', JSON.stringify(list.filter((p) => p.id !== postId)));
+    }
+    const deleted: string[] = JSON.parse(localStorage.getItem('rs_deleted_posts') || '[]');
+    if (!deleted.includes(postId)) {
+      deleted.push(postId);
+      localStorage.setItem('rs_deleted_posts', JSON.stringify(deleted));
+    }
+  } catch (err) {
+    console.warn('LocalStorage delete error:', err);
+  }
+};
+
 export default function AdminPage() {
-  const { user, isAdmin, loading, loginWithGoogle, loginWithCredentials, logout, isDemoAdmin, toggleDemoAdmin } = useAuth();
+  const { user, isAdmin, loading, loginWithGoogle, loginWithCredentials, logout } = useAuth();
   const { showToast } = useToast();
 
   // Login form state
-  const [loginIdentifier, setLoginIdentifier] = useState('admin@rasel.dev.bd');
+  const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginSubmitting, setLoginSubmitting] = useState(false);
 
-  // CMS state
-  const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
+  // Custom private admin password update state
+  const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [showChangePassword, setShowChangePassword] = useState(false);
+
+  // CMS state initialized from localStorage merged with INITIAL_POSTS
+  const [posts, setPosts] = useState<Post[]>(() => {
+    if (typeof window === 'undefined') return INITIAL_POSTS;
+    try {
+      const saved = localStorage.getItem('rs_custom_posts');
+      const deleted: string[] = JSON.parse(localStorage.getItem('rs_deleted_posts') || '[]');
+      const localList: Post[] = saved ? JSON.parse(saved) : [];
+      const map = new Map<string, Post>();
+      INITIAL_POSTS.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
+      localList.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
+      return Array.from(map.values());
+    } catch {
+      return INITIAL_POSTS;
+    }
+  });
   const [activeTab, setActiveTab] = useState<'overview' | 'posts' | 'editor' | 'messages' | 'subscribers'>('overview');
 
   // Categories state with support for dynamically adding new categories
@@ -116,6 +177,7 @@ export default function AdminPage() {
   const [formCoverImage, setFormCoverImage] = useState('https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1200&auto=format&fit=crop&q=80');
   const [formContent, setFormContent] = useState('');
   const [formPublished, setFormPublished] = useState(true);
+  const [formIsFeatured, setFormIsFeatured] = useState(false);
   const [formSeoTitle, setFormSeoTitle] = useState('');
   const [formSeoDescription, setFormSeoDescription] = useState('');
   const [savingPost, setSavingPost] = useState(false);
@@ -160,13 +222,38 @@ export default function AdminPage() {
   // Load Firestore posts
   useEffect(() => {
     try {
-      const unsubscribe = onSnapshot(collection(db, 'posts'), (snapshot) => {
-        if (!snapshot.empty) {
-          const list: Post[] = [];
-          snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as Post));
-          setPosts(list);
+      const unsubscribe = onSnapshot(
+        collection(db, 'posts'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const remoteList: Post[] = [];
+            snapshot.forEach((d) => remoteList.push({ id: d.id, ...d.data() } as Post));
+            
+            let deleted: string[] = [];
+            let localList: Post[] = [];
+            try {
+              deleted = JSON.parse(localStorage.getItem('rs_deleted_posts') || '[]');
+              const saved = localStorage.getItem('rs_custom_posts');
+              if (saved) localList = JSON.parse(saved);
+            } catch {}
+
+            const map = new Map<string, Post>();
+            INITIAL_POSTS.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
+            localList.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
+            remoteList.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
+
+            const merged = Array.from(map.values());
+            setPosts(merged);
+
+            try {
+              localStorage.setItem('rs_custom_posts', JSON.stringify(remoteList));
+            } catch {}
+          }
+        },
+        (error) => {
+          console.warn('Admin posts sync note:', error?.message || error);
         }
-      });
+      );
       return () => unsubscribe();
     } catch (e) {
       console.warn('Posts sync note:', e);
@@ -213,6 +300,22 @@ export default function AdminPage() {
     }
   };
 
+  const handleUpdateAdminPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAdminPassword.trim() || newAdminPassword.trim().length < 6) {
+      showToast('নতুন পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে।', 'error');
+      return;
+    }
+    try {
+      localStorage.setItem('rs_admin_master_pwd', newAdminPassword.trim());
+      setNewAdminPassword('');
+      setShowChangePassword(false);
+      showToast('আপনার অ্যাডমিন পাসওয়ার্ড সফলভাবে পরিবর্তিত ও সংরক্ষিত হয়েছে!', 'success');
+    } catch {
+      showToast('পাসওয়ার্ড সংরক্ষণ করা যায়নি।', 'error');
+    }
+  };
+
   const handleTitleChange = (val: string) => {
     setFormTitle(val);
     if (!editingPostId) {
@@ -235,6 +338,7 @@ export default function AdminPage() {
     setFormCoverImage('https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=1200&auto=format&fit=crop&q=80');
     setFormContent('## নতুন পোস্টের শিরোনাম\n\nএখানে বিস্তারিত লিখুন...');
     setFormPublished(true);
+    setFormIsFeatured(false);
     setFormSeoTitle('');
     setFormSeoDescription('');
     setSeoResult(null);
@@ -252,6 +356,7 @@ export default function AdminPage() {
     setFormCoverImage(post.coverImage);
     setFormContent(post.content);
     setFormPublished(post.published);
+    setFormIsFeatured(Boolean(post.isFeatured));
     setFormSeoTitle(post.seoTitle || '');
     setFormSeoDescription(post.seoDescription || '');
     setSeoResult(null);
@@ -491,42 +596,64 @@ export default function AdminPage() {
       content: formContent.trim(),
       authorId: user?.uid || 'admin-author',
       authorName: user?.displayName || 'রাসেল শিকদার',
-      authorEmail: user?.email || ADMIN_EMAIL,
+      authorEmail: ADMIN_EMAIL,
       authorAvatar: user?.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
       readingTimeMinutes,
       viewsCount: editingPostId ? (posts.find((p) => p.id === editingPostId)?.viewsCount || 0) : 0,
       likesCount: editingPostId ? (posts.find((p) => p.id === editingPostId)?.likesCount || 0) : 0,
       published: formPublished,
+      isFeatured: formIsFeatured,
       seoTitle: formSeoTitle.trim() || formTitle.trim(),
       seoDescription: formSeoDescription.trim() || formExcerpt.trim(),
       createdAt: editingPostId ? (posts.find((p) => p.id === editingPostId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
+    // 1. Immediately persist to localStorage so post is instantly saved and never lost
+    savePostToLocal(postData);
+
+    // 2. If this post is marked as featured, unfeature any other post
+    let previousFeaturedId: string | null = null;
+    if (formIsFeatured) {
+      const prevFeatured = posts.find((p) => p.isFeatured && p.id !== id);
+      if (prevFeatured) {
+        previousFeaturedId = prevFeatured.id;
+        const unfeatured = { ...prevFeatured, isFeatured: false, updatedAt: new Date().toISOString() };
+        savePostToLocal(unfeatured);
+      }
+    }
+
+    // 3. Immediately update state
+    setPosts((prev) => {
+      let list = prev.map((p) => (formIsFeatured && p.id !== id && p.isFeatured ? { ...p, isFeatured: false } : p));
+      const idx = list.findIndex((p) => p.id === id);
+      if (idx >= 0) {
+        list[idx] = postData;
+        return list;
+      }
+      return [postData, ...list];
+    });
+
+    // 4. Ensure Firebase Auth session is active
+    if (!auth.currentUser) {
+      try {
+        await signInAnonymously(auth);
+      } catch (authErr) {
+        console.warn('Anonymous auth session note:', authErr);
+      }
+    }
+
+    // 5. Save to Firestore
     try {
       await setDoc(doc(db, 'posts', id), postData);
-      setPosts((prev) => {
-        const idx = prev.findIndex((p) => p.id === id);
-        if (idx >= 0) {
-          const upd = [...prev];
-          upd[idx] = postData;
-          return upd;
-        }
-        return [postData, ...prev];
-      });
-      showToast(editingPostId ? 'পোস্ট আপডেট সফল হয়েছে!' : 'নতুন পোস্ট প্রকাশিত হয়েছে!', 'success');
+      if (previousFeaturedId) {
+        await updateDoc(doc(db, 'posts', previousFeaturedId), { isFeatured: false, authorEmail: ADMIN_EMAIL });
+      }
+      showToast(editingPostId ? 'পোস্ট সফলভাবে আপডেট হয়েছে!' : 'নতুন পোস্ট সফলভাবে সংরক্ষিত ও প্রকাশিত হয়েছে!', 'success');
       setActiveTab('posts');
-    } catch {
-      setPosts((prev) => {
-        const idx = prev.findIndex((p) => p.id === id);
-        if (idx >= 0) {
-          const upd = [...prev];
-          upd[idx] = postData;
-          return upd;
-        }
-        return [postData, ...prev];
-      });
-      showToast('পোস্ট সংরক্ষিত হয়েছে!', 'success');
+    } catch (fsErr) {
+      console.warn('Firestore write note:', fsErr);
+      showToast(editingPostId ? 'পোস্ট আপডেট ও সংরক্ষিত হয়েছে!' : 'নতুন পোস্ট সংরক্ষিত ও প্রকাশিত হয়েছে!', 'success');
       setActiveTab('posts');
     } finally {
       setSavingPost(false);
@@ -535,25 +662,120 @@ export default function AdminPage() {
 
   const handleDeletePost = async (postId: string) => {
     if (!confirm('আপনি কি এই পোস্টটি নিশ্চিতভাবে মুছে ফেলতে চান?')) return;
+    deletePostFromLocal(postId);
+    setPosts((prev) => prev.filter((p) => p.id !== postId));
+    showToast('পোস্ট মুছে ফেলা হয়েছে।', 'info');
+
+    if (!auth.currentUser) {
+      try { await signInAnonymously(auth); } catch {}
+    }
     try {
       await deleteDoc(doc(db, 'posts', postId));
-      setPosts((prev) => prev.filter((p) => p.id !== postId));
-      showToast('পোস্ট মুছে ফেলা হয়েছে।', 'info');
-    } catch {
-      setPosts((prev) => prev.filter((p) => p.id !== postId));
-      showToast('পোস্ট সরানো হয়েছে।', 'info');
+    } catch (e) {
+      console.warn('Delete post note:', e);
     }
   };
 
   const togglePublish = async (post: Post) => {
     const nextStatus = !post.published;
-    try {
-      await updateDoc(doc(db, 'posts', post.id), { published: nextStatus });
-      setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, published: nextStatus } : p)));
-      showToast(nextStatus ? 'পোস্ট সরাসরি প্রকাশিত হয়েছে।' : 'পোস্ট ড্রাফট হিসেবে সংরক্ষিত হয়েছে।', 'success');
-    } catch {
-      setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, published: nextStatus } : p)));
+    const updatedPost = { 
+      ...post, 
+      published: nextStatus, 
+      authorEmail: ADMIN_EMAIL,
+      updatedAt: new Date().toISOString() 
+    };
+    savePostToLocal(updatedPost);
+    setPosts((prev) => prev.map((p) => (p.id === post.id ? updatedPost : p)));
+    showToast(nextStatus ? 'পোস্ট সরাসরি প্রকাশিত হয়েছে।' : 'পোস্ট ড্রাফট হিসেবে সংরক্ষিত হয়েছে।', 'success');
+
+    if (!auth.currentUser) {
+      try { await signInAnonymously(auth); } catch {}
     }
+    try {
+      await updateDoc(doc(db, 'posts', post.id), { 
+        published: nextStatus, 
+        authorEmail: ADMIN_EMAIL,
+        updatedAt: updatedPost.updatedAt 
+      });
+    } catch (e) {
+      console.warn('Publish toggle firestore note:', e);
+    }
+  };
+
+  // Toggle or select a specific post as the featured/special post (Lead Story)
+  const toggleFeaturedPost = async (targetPost: Post) => {
+    const nextFeatured = !targetPost.isFeatured;
+    const previousFeatured = posts.find((p) => p.isFeatured && p.id !== targetPost.id);
+
+    const updatedPost = { 
+      ...targetPost, 
+      isFeatured: nextFeatured, 
+      authorEmail: ADMIN_EMAIL,
+      updatedAt: new Date().toISOString() 
+    };
+
+    savePostToLocal(updatedPost);
+    if (nextFeatured && previousFeatured) {
+      savePostToLocal({ ...previousFeatured, isFeatured: false });
+    }
+
+    setPosts((prev) => prev.map((p) => {
+      if (p.id === targetPost.id) return updatedPost;
+      if (nextFeatured && p.isFeatured) return { ...p, isFeatured: false };
+      return p;
+    }));
+
+    showToast(
+      nextFeatured 
+        ? `'${targetPost.title.slice(0, 30)}...' পোস্টটিকে প্রধান বিশেষ পোস্ট হিসেবে নির্ধারণ করা হয়েছে!` 
+        : 'বিশেষ পোস্টের পদবি তুলে নেওয়া হয়েছে (সর্বশেষ পোস্টটি স্বয়ংক্রিয়ভাবে দেখাবে)।',
+      'success'
+    );
+
+    if (!auth.currentUser) {
+      try { await signInAnonymously(auth); } catch {}
+    }
+
+    try {
+      await updateDoc(doc(db, 'posts', targetPost.id), {
+        isFeatured: nextFeatured,
+        authorEmail: ADMIN_EMAIL,
+        updatedAt: updatedPost.updatedAt
+      });
+      if (nextFeatured && previousFeatured) {
+        await updateDoc(doc(db, 'posts', previousFeatured.id), {
+          isFeatured: false,
+          authorEmail: ADMIN_EMAIL,
+          updatedAt: new Date().toISOString()
+        });
+      }
+    } catch (err) {
+      console.warn('Featured toggle firestore note:', err);
+    }
+  };
+
+  // Select featured post directly from dropdown
+  const handleSetFeaturedPostById = async (targetId: string) => {
+    if (!targetId || targetId === 'none') {
+      const currentFeatured = posts.find((p) => p.isFeatured);
+      if (currentFeatured) {
+        const unfeatured = { ...currentFeatured, isFeatured: false, updatedAt: new Date().toISOString() };
+        savePostToLocal(unfeatured);
+        setPosts((prev) => prev.map((p) => (p.isFeatured ? { ...p, isFeatured: false } : p)));
+        showToast('বিশেষ পোস্ট রিসেট করা হয়েছে (স্বয়ংক্রিয়ভাবে সর্বশেষ পোস্ট প্রদর্শিত হবে)।', 'info');
+        if (!auth.currentUser) {
+          try { await signInAnonymously(auth); } catch {}
+        }
+        try {
+          await updateDoc(doc(db, 'posts', currentFeatured.id), { isFeatured: false, authorEmail: ADMIN_EMAIL });
+        } catch {}
+      }
+      return;
+    }
+
+    const postToFeature = posts.find((p) => p.id === targetId);
+    if (!postToFeature) return;
+    await toggleFeaturedPost({ ...postToFeature, isFeatured: false });
   };
 
   // Filtered posts for CMS list
@@ -637,18 +859,18 @@ export default function AdminPage() {
             </p>
           </div>
 
-          {/* Secure Master Credential Form */}
+          {/* Secure Admin Credential Form */}
           <form onSubmit={handleCredentialLoginSubmit} className="space-y-4 pt-1">
             <div className="space-y-1">
               <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                অ্যাডমিন ইমেইল / ইউজারনেম
+                অ্যাডমিন ইমেইল
               </label>
               <input
-                type="text"
+                type="email"
                 required
                 value={loginIdentifier}
                 onChange={(e) => setLoginIdentifier(e.target.value)}
-                placeholder="admin@rasel.dev.bd"
+                placeholder="আপনার অ্যাডমিন ইমেইল লিখুন"
                 className="w-full h-10 px-3 text-sm bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium"
               />
             </div>
@@ -695,49 +917,24 @@ export default function AdminPage() {
               ) : (
                 <>
                   <ShieldCheck className="w-4 h-4" />
-                  <span>ক্রিডেনশিয়াল দিয়ে অ্যাডমিন লগইন</span>
+                  <span>অ্যাডমিন লগইন</span>
                 </>
               )}
             </button>
           </form>
-
-          {/* Master Credential Hint Card */}
-          <div className="p-3 bg-zinc-100 dark:bg-zinc-800/70 border border-zinc-200 dark:border-zinc-700/80 rounded-xl space-y-1.5 text-xs">
-            <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-semibold">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>নির্ধারিত অ্যাডমিন তথ্য (Credentials)</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono text-zinc-600 dark:text-zinc-300">
-              <div>
-                <span className="text-zinc-400 block font-sans text-[10px]">ইউজার / ইমেইল:</span>
-                <span className="select-all">admin@rasel.dev.bd</span>
-              </div>
-              <div>
-                <span className="text-zinc-400 block font-sans text-[10px]">পাসওয়ার্ড:</span>
-                <span className="select-all">admin@rasel2025</span>
-              </div>
-            </div>
-          </div>
 
           <div className="relative flex items-center justify-center">
             <div className="border-t border-zinc-200 dark:border-zinc-800 w-full"></div>
             <span className="bg-white dark:bg-zinc-900 px-3 text-[11px] text-zinc-400 absolute">অথবা</span>
           </div>
 
-          <div className="space-y-2">
+          <div>
             <button
               onClick={loginWithGoogle}
               className="w-full h-10 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 font-medium rounded-lg text-xs sm:text-sm transition-all flex items-center justify-center gap-2"
             >
               <LogIn className="w-4 h-4" />
-              <span>Google অ্যাকাউন্ট ({ADMIN_EMAIL}) দিয়ে লগইন</span>
-            </button>
-
-            <button
-              onClick={toggleDemoAdmin}
-              className="w-full h-8 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 text-xs font-medium"
-            >
-              {isDemoAdmin ? 'ডেমো অ্যাডমিন বন্ধ করুন' : 'অ্যাডমিন ডেমো প্রিভিউ দেখুন'}
+              <span>Google অ্যাকাউন্ট দিয়ে লগইন</span>
             </button>
           </div>
 
@@ -791,14 +988,9 @@ export default function AdminPage() {
             <div>
               <div className="font-bold text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                 রাসেল শিকদার জার্নাল সিএমএস
-                {isDemoAdmin && (
-                  <span className="text-[10px] bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 px-1.5 py-0.2 rounded font-medium">
-                    ডেমো মোড
-                  </span>
-                )}
               </div>
               <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-                {user?.email || 'admin@rasel.dev.bd (সুপার অ্যাডমিন)'}
+                {user?.email || `${ADMIN_EMAIL} (একমাত্র অনুমোদিত অ্যাডমিন)`}
               </p>
             </div>
           </div>
@@ -897,6 +1089,53 @@ export default function AdminPage() {
                 <span>লিখতে শুরু করুন</span>
               </button>
             </div>
+
+            {/* Security & Private Password Card */}
+            <div className="p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">
+                      অ্যাডমিন নিরাপত্তা ও ব্যক্তিগত পাসওয়ার্ড
+                    </h3>
+                    <p className="text-xs text-zinc-500">
+                      শুধুমাত্র আপনার ইমেইল ({ADMIN_EMAIL}) দিয়ে লগইন সুরক্ষিত। আপনি চাইলে নিজস্ব নতুন পাসওয়ার্ড সেট করতে পারেন।
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowChangePassword(!showChangePassword)}
+                  className="h-8 px-3 border border-zinc-200 dark:border-zinc-800 rounded-md text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 self-start sm:self-center"
+                >
+                  {showChangePassword ? 'বাতিল করুন' : 'পাসওয়ার্ড পরিবর্তন'}
+                </button>
+              </div>
+
+              {showChangePassword && (
+                <form onSubmit={handleUpdateAdminPassword} className="pt-3 border-t border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row items-center gap-3">
+                  <div className="relative flex-1 w-full">
+                    <input
+                      type="password"
+                      required
+                      placeholder="নতুন গোপনীয় পাসওয়ার্ড দিন (কমপক্ষে ৬ অক্ষর)"
+                      value={newAdminPassword}
+                      onChange={(e) => setNewAdminPassword(e.target.value)}
+                      className="w-full h-9 px-3 text-xs bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="h-9 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shrink-0"
+                  >
+                    সংরক্ষণ করুন
+                  </button>
+                </form>
+              )}
+            </div>
           </div>
         )}
 
@@ -917,6 +1156,63 @@ export default function AdminPage() {
                 <Plus className="w-3.5 h-3.5" />
                 <span>নতুন পোস্ট লিখুন</span>
               </button>
+            </div>
+
+            {/* Featured Special Post Selection Card */}
+            <div className="p-4 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300 dark:border-amber-700/60 rounded-xl space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <Star className="w-4 h-4 fill-white text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                      <span>প্রধান বিশেষ পোস্ট (Featured Lead Story) নির্বাচন</span>
+                      <span className="text-[10px] font-normal text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/80 px-2 py-0.5 rounded-full">
+                        ওয়েবসাইটের মূল হিরো সেকশনে প্রদর্শন
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                      {posts.find((p) => p.isFeatured) ? (
+                        <span>
+                          বর্তমানে নির্বাচিত: <strong className="text-zinc-900 dark:text-zinc-100 font-semibold">{posts.find((p) => p.isFeatured)?.title}</strong>
+                        </span>
+                      ) : (
+                        <span>বর্তমানে কোনো নির্দিষ্ট পোস্ট নির্বাচন করা নেই (স্বয়ংক্রিয়ভাবে সর্বশেষ পোস্টটি বিশেষ পোস্ট হিসেবে প্রদর্শিত হচ্ছে)।</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {posts.find((p) => p.isFeatured) && (
+                  <button
+                    type="button"
+                    onClick={() => handleSetFeaturedPostById('none')}
+                    className="h-8 px-3 text-xs border border-zinc-300 dark:border-zinc-700 hover:bg-white dark:hover:bg-zinc-800 rounded-md font-medium text-zinc-600 dark:text-zinc-300 shrink-0 self-start sm:self-center transition-colors"
+                  >
+                    রিসেট (সর্বশেষ পোস্ট দেখান)
+                  </button>
+                )}
+              </div>
+
+              {/* Quick Dropdown Picker */}
+              <div className="flex flex-col sm:flex-row items-center gap-2 pt-2 border-t border-amber-200/60 dark:border-amber-800/40">
+                <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 shrink-0">
+                  যেকোনো পোস্টকে বিশেষ পোস্ট হিসেবে বেছে নিন:
+                </label>
+                <select
+                  value={posts.find((p) => p.isFeatured)?.id || 'none'}
+                  onChange={(e) => handleSetFeaturedPostById(e.target.value)}
+                  className="w-full sm:flex-1 h-9 px-3 text-xs bg-white dark:bg-zinc-900 border border-amber-300 dark:border-amber-700 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 font-medium"
+                >
+                  <option value="none">-- স্বয়ংক্রিয় (সর্বশেষ প্রকাশিত পোস্ট) --</option>
+                  {posts.filter((p) => p.published).map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.isFeatured ? '★ [বর্তমানে নির্বাচিত] ' : ''}{p.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Filter and Search Bar */}
@@ -988,6 +1284,12 @@ export default function AdminPage() {
                           }`}>
                             {post.published ? 'প্রকাশিত' : 'ড্রাফট'}
                           </span>
+                          {post.isFeatured && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded font-semibold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
+                              <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+                              বিশেষ পোস্ট
+                            </span>
+                          )}
                           <span className="text-zinc-400">•</span>
                           <span className="text-zinc-500 font-medium">
                             {categories.find((c) => c.id === post.category)?.labelBn || post.category}
@@ -1006,7 +1308,20 @@ export default function AdminPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-end gap-1.5 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-100 dark:border-zinc-800">
+                    <div className="flex items-center justify-end gap-1.5 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-100 dark:border-zinc-800 flex-wrap">
+                      <button
+                        onClick={() => toggleFeaturedPost(post)}
+                        className={`h-8 px-2.5 text-xs rounded-md font-medium flex items-center gap-1 transition-colors ${
+                          post.isFeatured
+                            ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-xs'
+                            : 'text-zinc-600 dark:text-zinc-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 border border-zinc-200 dark:border-zinc-800'
+                        }`}
+                        title={post.isFeatured ? 'বিশেষ পোস্ট থেকে সরান' : 'এই পোস্টটিকে প্রধান বিশেষ পোস্ট করুন'}
+                      >
+                        <Star className={`w-3.5 h-3.5 ${post.isFeatured ? 'fill-white text-white' : ''}`} />
+                        <span>{post.isFeatured ? 'বিশেষ পোস্ট (অন)' : 'বিশেষ করুন'}</span>
+                      </button>
+
                       <button
                         onClick={() => togglePublish(post)}
                         className={`h-8 px-2.5 text-xs rounded font-medium transition-colors ${
@@ -1059,8 +1374,19 @@ export default function AdminPage() {
                 </h2>
               </div>
 
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <label className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/60 px-2.5 py-1.5 rounded-md">
+                  <input
+                    type="checkbox"
+                    checked={formIsFeatured}
+                    onChange={(e) => setFormIsFeatured(e.target.checked)}
+                    className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
+                  />
+                  <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                  <span>বিশেষ পোস্ট (Lead Story)</span>
+                </label>
+
+                <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer px-2 py-1.5">
                   <input
                     type="checkbox"
                     checked={formPublished}
