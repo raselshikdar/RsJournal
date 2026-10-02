@@ -1,53 +1,30 @@
-name: Deploy to Firebase Hosting & Rules
-
+name: Deploy to Firebase Hosting
 on:
   push:
     branches:
-      - main
-      - master
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  id-token: write
+      - main  # আপনার মেইন ব্রাঞ্চের নাম master হলে এখানে master লিখে দেবেন
 
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
+          
       - name: Install Dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --legacy-peer-deps || npm install --legacy-peer-deps
-          elif [ -f yarn.lock ]; then
-            yarn install --frozen-lockfile || yarn install
-          else
-            npm install --legacy-peer-deps
-          fi
-
-      - name: Build Next.js Application
+        run: npm install
+        
+      - name: Build Project
         run: npm run build
-        env:
-          NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL || 'https://rasel.dev.bd' }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-
-      - name: Authenticate to Google Cloud via Workload Identity Federation (OIDC)
-        uses: google-github-actions/auth@v3
+        
+      - name: Deploy to Firebase
+        uses: FirebaseExtended/action-hosting-deploy@v0
         with:
-          project_id: bdforum247
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER || vars.WIF_PROVIDER || 'projects/520666182796/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider' }}
-          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT || vars.WIF_SERVICE_ACCOUNT || 'github-actions-deployer@bdforum247.iam.gserviceaccount.com' }}
-
-      - name: Deploy to Firebase Hosting & Firestore
-        run: |
-          npx firebase-tools deploy --only hosting,firestore:rules --project bdforum247 --non-interactive
-        env:
-          FIREBASE_CLI_EXPERIMENTS: webframeworks
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          projectId: rsjournalbd
+          channelId: live
