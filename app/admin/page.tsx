@@ -40,12 +40,13 @@ import {
   EyeOff,
   Columns,
   Maximize2,
-  Star
+  Bookmark
 } from 'lucide-react';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/Toast';
 import { Post, ContactMessage, Subscriber, SeoOptimizationResult, BLOG_CATEGORIES } from '../../lib/types';
 import { INITIAL_POSTS } from '../../lib/sample-data';
+import { compressImageToWebP } from '../../lib/image-compressor';
 import { 
   db, 
   auth,
@@ -181,6 +182,10 @@ export default function AdminPage() {
   const [formSeoTitle, setFormSeoTitle] = useState('');
   const [formSeoDescription, setFormSeoDescription] = useState('');
   const [savingPost, setSavingPost] = useState(false);
+
+  // Inline attached images registry (WebP < 50KB with short token references)
+  const [formContentImages, setFormContentImages] = useState<Record<string, { dataUrl: string; caption: string; sizeKb: number }>>({});
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Editor mode & preview
   const [editorViewMode, setEditorViewMode] = useState<'edit' | 'preview' | 'split'>('edit');
@@ -337,6 +342,7 @@ export default function AdminPage() {
     setFormExcerpt('');
     setFormCoverImage('https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=1200&auto=format&fit=crop&q=80');
     setFormContent('## নতুন পোস্টের শিরোনাম\n\nএখানে বিস্তারিত লিখুন...');
+    setFormContentImages({});
     setFormPublished(true);
     setFormIsFeatured(false);
     setFormSeoTitle('');
@@ -354,7 +360,40 @@ export default function AdminPage() {
     setFormTags(post.tags?.join(', ') || '');
     setFormExcerpt(post.excerpt);
     setFormCoverImage(post.coverImage);
-    setFormContent(post.content);
+
+    // Initialize content images registry and auto-migrate legacy base64 URLs
+    const initialImages: Record<string, { dataUrl: string; caption: string; sizeKb: number }> = {};
+    if (post.contentImages) {
+      Object.entries(post.contentImages).forEach(([k, dataUrl]) => {
+        const token = k.startsWith('img:') ? k : (k.startsWith('img-') ? k.replace('img-', 'img:') : `img:${k}`);
+        const commaIdx = dataUrl.indexOf(',');
+        const sizeBytes = commaIdx !== -1 ? Math.round((dataUrl.substring(commaIdx + 1).length * 3) / 4) : 0;
+        initialImages[token] = {
+          dataUrl,
+          caption: 'আর্টিকেল চিত্র',
+          sizeKb: Math.round((sizeBytes / 1024) * 10) / 10 || 35,
+        };
+      });
+    }
+
+    // Auto-migrate any legacy raw base64 data URLs in post.content into clean short tokens
+    let contentToSet = post.content;
+    const dataUrlRegex = /!\[(.*?)\]\((data:image\/[a-zA-Z+]+;base64,[^)]+)\)/g;
+    let autoIndex = Object.keys(initialImages).length + 1;
+    contentToSet = contentToSet.replace(dataUrlRegex, (_, alt, rawDataUrl) => {
+      const token = `img:${autoIndex++}`;
+      const commaIdx = rawDataUrl.indexOf(',');
+      const sizeBytes = commaIdx !== -1 ? Math.round((rawDataUrl.substring(commaIdx + 1).length * 3) / 4) : 0;
+      initialImages[token] = {
+        dataUrl: rawDataUrl,
+        caption: alt || 'আর্টিকেল চিত্র',
+        sizeKb: Math.round((sizeBytes / 1024) * 10) / 10 || 38,
+      };
+      return `![${alt || 'চিত্র'}](${token})`;
+    });
+
+    setFormContent(contentToSet);
+    setFormContentImages(initialImages);
     setFormPublished(post.published);
     setFormIsFeatured(Boolean(post.isFeatured));
     setFormSeoTitle(post.seoTitle || '');
@@ -364,8 +403,8 @@ export default function AdminPage() {
     setActiveTab('editor');
   };
 
-  // Direct image upload for Cover Image
-  const handleCoverFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Direct image upload for Cover Image (< 50KB WebP, 16:9 perfect ratio)
+  const handleCoverFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -374,72 +413,67 @@ export default function AdminPage() {
       return;
     }
 
-    if (file.size > 8 * 1024 * 1024) {
-      showToast('ছবিটির আকার ৮ মেগাবাইটের কম হতে হবে।', 'error');
-      return;
+    setUploadingImage(true);
+    try {
+      showToast('কভার ছবি অপ্টিমাইজ ও কম্প্রেস করা হচ্ছে...', 'info');
+      const result = await compressImageToWebP(file, 1120);
+      setFormCoverImage(result.dataUrl);
+      showToast(`কভার ছবি সফলভাবে আপলোড হয়েছে! (${result.sizeKb} KB, WebP, পারফেক্ট ১৬:৯ সাইজ)`, 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'কভার ছবি আপলোড ব্যর্থ হয়েছে।', 'error');
+    } finally {
+      setUploadingImage(false);
+      e.target.value = '';
     }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      if (dataUrl) {
-        // Optimize via canvas to keep footprint responsive
-        const img = new Image();
-        img.onload = () => {
-          const maxDim = 1400;
-          let w = img.width;
-          let h = img.height;
-          if (w > maxDim || h > maxDim) {
-            if (w > h) {
-              h = Math.round((h * maxDim) / w);
-              w = maxDim;
-            } else {
-              w = Math.round((w * maxDim) / h);
-              h = maxDim;
-            }
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, w, h);
-            const optimized = canvas.toDataURL('image/jpeg', 0.85);
-            setFormCoverImage(optimized);
-            showToast('কভার ছবি সফলভাবে আপলোড হয়েছে!', 'success');
-          } else {
-            setFormCoverImage(dataUrl);
-            showToast('কভার ছবি আপলোড হয়েছে!', 'success');
-          }
-        };
-        img.src = dataUrl;
-      }
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
   };
 
-  // Direct image upload inside Post Content
-  const handleInlineImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Direct image upload inside Post Content (< 50KB WebP, 16:9 perfect ratio, short token)
+  const handleInlineImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      showToast('শুধুমাত্র ইমেজ ফাইল আপলোড করুন।', 'error');
+      showToast('শুধুমাত্র ইমেজ ফাইল (JPG, PNG, WebP) আপলোড করুন।', 'error');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      if (dataUrl) {
-        const caption = prompt('ছবিটির ক্যাপশন বা অল্টার টেক্সট দিন (ঐচ্ছিক):', file.name.replace(/\.[^/.]+$/, '')) || 'আর্টিকেল চিত্র';
-        insertMarkdownText(`\n\n![${caption}](${dataUrl})\n\n`);
-        showToast('পোস্টে ছবি সফলভাবে যুক্ত হয়েছে!', 'success');
+    setUploadingImage(true);
+    try {
+      showToast('পোস্টের ছবি অপ্টিমাইজ ও কম্প্রেস করা হচ্ছে...', 'info');
+      // 1. Compresses to WebP strictly < 50KB in standard 16:9 aspect ratio
+      const result = await compressImageToWebP(file, 960);
+
+      // 2. Generate short token ID (img:1, img:2, ...)
+      const existingTokens = Object.keys(formContentImages);
+      let nextIndex = 1;
+      while (existingTokens.includes(`img:${nextIndex}`) || formContent.includes(`(img:${nextIndex})`)) {
+        nextIndex++;
       }
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
+      const token = `img:${nextIndex}`;
+
+      const rawName = file.name.replace(/\.[^/.]+$/, '').trim();
+      const caption = prompt('ছবিটির ক্যাপশন বা বিবরণ দিন (ঐচ্ছিক):', rawName) || rawName || 'আর্টিকেল চিত্র';
+
+      // 3. Register in formContentImages state
+      setFormContentImages((prev) => ({
+        ...prev,
+        [token]: {
+          dataUrl: result.dataUrl,
+          caption,
+          sizeKb: result.sizeKb,
+        },
+      }));
+
+      // 4. Insert clean short reference into markdown instead of a giant base64 URL
+      insertMarkdownText(`\n\n![${caption}](${token})\n\n`);
+
+      showToast(`পোস্টে ছবি সফলভাবে যুক্ত হয়েছে! (${result.sizeKb} KB, WebP, পারফেক্ট ১৬:৯ সাইজ)`, 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'ছবি আপলোড করতে ব্যর্থ হয়েছে।', 'error');
+    } finally {
+      setUploadingImage(false);
+      e.target.value = '';
+    }
   };
 
   // Rich text formatting insertion helper
@@ -585,6 +619,16 @@ export default function AdminPage() {
     const wordCount = formContent.trim().split(/\s+/).length;
     const readingTimeMinutes = Math.max(1, Math.round(wordCount / 180));
 
+    // Construct persistent contentImages dictionary for short tokens
+    const finalContentImages: Record<string, string> = {};
+    Object.entries(formContentImages).forEach(([k, item]) => {
+      const url = typeof item === 'string' ? item : item.dataUrl;
+      finalContentImages[k] = url;
+      if (k.startsWith('img:')) {
+        finalContentImages[k.replace('img:', 'img-')] = url;
+      }
+    });
+
     const postData: Post = {
       id,
       title: formTitle.trim(),
@@ -594,6 +638,7 @@ export default function AdminPage() {
       excerpt: formExcerpt.trim() || formContent.slice(0, 150).replace(/#/g, '') + '...',
       coverImage: formCoverImage.trim() || 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1200&auto=format&fit=crop&q=80',
       content: formContent.trim(),
+      contentImages: Object.keys(finalContentImages).length > 0 ? finalContentImages : undefined,
       authorId: user?.uid || 'admin-author',
       authorName: user?.displayName || 'রাসেল শিকদার',
       authorEmail: ADMIN_EMAIL,
@@ -827,10 +872,30 @@ export default function AdminPage() {
       }
       const imgMatch = trimmed.match(/^!\[(.*?)\]\((.*?)\)$/);
       if (imgMatch) {
+        const alt = imgMatch[1];
+        let src = imgMatch[2];
+        if (formContentImages[src]) {
+          src = formContentImages[src].dataUrl;
+        } else if (formContentImages[src.replace('img-', 'img:')]) {
+          src = formContentImages[src.replace('img-', 'img:')].dataUrl;
+        } else if (formContentImages[`img:${src}`]) {
+          src = formContentImages[`img:${src}`].dataUrl;
+        }
         return (
-          <figure key={idx} className="my-4">
-            <img src={imgMatch[2]} alt={imgMatch[1]} className="max-h-72 w-auto mx-auto rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm" />
-            {imgMatch[1] && <figcaption className="text-center text-[11px] text-zinc-500 mt-1 italic">{imgMatch[1]}</figcaption>}
+          <figure key={idx} className="my-5">
+            <div className="relative overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 aspect-video w-full flex items-center justify-center shadow-xs">
+              <img 
+                src={src} 
+                alt={alt || 'আর্টিকেল চিত্র'} 
+                className="w-full h-full object-cover" 
+                loading="lazy" 
+              />
+            </div>
+            {alt && (
+              <figcaption className="text-center text-xs text-zinc-500 dark:text-zinc-400 mt-1.5 italic font-sans">
+                {alt}
+              </figcaption>
+            )}
           </figure>
         );
       }
@@ -1163,7 +1228,7 @@ export default function AdminPage() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
-                    <Star className="w-4 h-4 fill-white text-white" />
+                    <Bookmark className="w-4 h-4" />
                   </div>
                   <div>
                     <h3 className="font-bold text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
@@ -1208,7 +1273,7 @@ export default function AdminPage() {
                   <option value="none">-- স্বয়ংক্রিয় (সর্বশেষ প্রকাশিত পোস্ট) --</option>
                   {posts.filter((p) => p.published).map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.isFeatured ? '★ [বর্তমানে নির্বাচিত] ' : ''}{p.title}
+                      {p.isFeatured ? '[বর্তমানে নির্বাচিত] ' : ''}{p.title}
                     </option>
                   ))}
                 </select>
@@ -1285,8 +1350,7 @@ export default function AdminPage() {
                             {post.published ? 'প্রকাশিত' : 'ড্রাফট'}
                           </span>
                           {post.isFeatured && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded font-semibold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
-                              <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+                            <span className="inline-flex items-center px-1.5 py-0.2 rounded font-semibold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
                               বিশেষ পোস্ট
                             </span>
                           )}
@@ -1318,7 +1382,6 @@ export default function AdminPage() {
                         }`}
                         title={post.isFeatured ? 'বিশেষ পোস্ট থেকে সরান' : 'এই পোস্টটিকে প্রধান বিশেষ পোস্ট করুন'}
                       >
-                        <Star className={`w-3.5 h-3.5 ${post.isFeatured ? 'fill-white text-white' : ''}`} />
                         <span>{post.isFeatured ? 'বিশেষ পোস্ট (অন)' : 'বিশেষ করুন'}</span>
                       </button>
 
@@ -1382,7 +1445,6 @@ export default function AdminPage() {
                     onChange={(e) => setFormIsFeatured(e.target.checked)}
                     className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
                   />
-                  <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
                   <span>বিশেষ পোস্ট (Lead Story)</span>
                 </label>
 
@@ -1801,6 +1863,114 @@ export default function AdminPage() {
                     <ImageIcon className="w-4 h-4" />
                   </button>
                 </div>
+
+                {/* Visual Attached Images Gallery in Perfect 16:9 Aspect Ratio (< 50KB WebP) */}
+                {Object.keys(formContentImages).length > 0 && (
+                  <div className="p-3 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                        <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
+                        সংযুক্ত ছবিসমূহ (পারফেক্ট ১৬:৯ সাইজ &lt; ৫০KB WebP)
+                      </span>
+                      <span className="text-[11px] text-zinc-500 font-mono">
+                        {Object.keys(formContentImages).length}টি ছবি সংরক্ষিত
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {Object.entries(formContentImages).map(([token, imgItem]) => {
+                        const inText = formContent.includes(`(${token})`);
+                        return (
+                          <div
+                            key={token}
+                            className="p-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-col gap-2 group shadow-xs"
+                          >
+                            {/* Real Image Preview in 16:9 perfect aspect ratio */}
+                            <div className="relative aspect-video w-full rounded-md overflow-hidden bg-zinc-100 dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-800">
+                              <img
+                                src={imgItem.dataUrl}
+                                alt={imgItem.caption}
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute top-1 left-1 bg-black/75 text-white font-mono text-[10px] px-1.5 py-0.5 rounded shadow-xs">
+                                {token}
+                              </div>
+                              <div className="absolute top-1 right-1 bg-emerald-600 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded shadow-xs">
+                                WebP • {imgItem.sizeKb} KB
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between text-[11px] text-zinc-500">
+                              <span className="truncate max-w-[130px] font-medium text-zinc-700 dark:text-zinc-300">
+                                {imgItem.caption}
+                              </span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-mono">
+                                ১৬:৯ সাইজ
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-1 pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!formContent.includes(`(${token})`)) {
+                                    insertMarkdownText(`\n\n![${imgItem.caption}](${token})\n\n`);
+                                    showToast(`'${token}' পোস্টের কার্সরে যুক্ত হয়েছে!`, 'success');
+                                  } else {
+                                    insertMarkdownText(`\n![${imgItem.caption}](${token})\n`);
+                                    showToast(`'${token}' পুনরায় ইনসার্ট করা হয়েছে!`, 'info');
+                                  }
+                                }}
+                                className={`flex-1 h-7 text-[11px] rounded font-medium transition-colors ${
+                                  inText
+                                    ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200'
+                                    : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 font-semibold'
+                                }`}
+                              >
+                                {inText ? '✓ যুক্ত আছে (পুনরায় দিন)' : '+ পোস্টে যুক্ত করুন'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newCap = prompt('নতুন ক্যাপশন দিন:', imgItem.caption);
+                                  if (newCap && newCap !== imgItem.caption) {
+                                    setFormContentImages((prev) => ({
+                                      ...prev,
+                                      [token]: { ...imgItem, caption: newCap }
+                                    }));
+                                  }
+                                }}
+                                className="h-7 px-2 text-[11px] rounded text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                title="ক্যাপশন পরিবর্তন"
+                              >
+                                এডিট
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (confirm('এই ছবিটি মুছে ফেলতে চান?')) {
+                                    setFormContentImages((prev) => {
+                                      const next = { ...prev };
+                                      delete next[token];
+                                      return next;
+                                    });
+                                    // Also remove reference from text if present
+                                    setFormContent((prev) => prev.replace(new RegExp(`!\\[[^\\]]*\\]\\(${token}\\)`, 'g'), ''));
+                                    showToast('ছবি অপসারণ করা হয়েছে।', 'info');
+                                  }
+                                }}
+                                className="h-7 px-2 text-[11px] text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded"
+                                title="মুছে ফেলুন"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Editor & Preview Panes */}
                 <div className={`grid gap-4 ${editorViewMode === 'split' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>

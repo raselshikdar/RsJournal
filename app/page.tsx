@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
-import { Plus, Star } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Post, BLOG_CATEGORIES } from '../lib/types';
 import { INITIAL_POSTS, INITIAL_GALLERY } from '../lib/sample-data';
 import { db, collection, onSnapshot, testConnection } from '../lib/firebase';
@@ -97,26 +97,32 @@ const CATEGORY_MAP: Record<string, {
 export default function BlogHome() {
   const [currentView, setCurrentView] = useState<string>('home');
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
-  const [posts, setPosts] = useState<Post[]>(() => {
-    if (typeof window === 'undefined') return INITIAL_POSTS;
-    try {
-      const saved = localStorage.getItem('rs_custom_posts');
-      const deleted: string[] = JSON.parse(localStorage.getItem('rs_deleted_posts') || '[]');
-      const localList: Post[] = saved ? JSON.parse(saved) : [];
-      const map = new Map<string, Post>();
-      INITIAL_POSTS.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
-      localList.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
-      return Array.from(map.values());
-    } catch {
-      return INITIAL_POSTS;
-    }
-  });
+  // Strictly initialize with INITIAL_POSTS to prevent SSR hydration mismatch
+  const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [activeSubcategory, setActiveSubcategory] = useState<string>('all');
   const [categoryPage, setCategoryPage] = useState<number>(1);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchPageQuery, setSearchPageQuery] = useState<string>('');
   const [displayCount, setDisplayCount] = useState<number>(6);
+
+  // Sync client-side localStorage posts cleanly after hydration
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        const saved = localStorage.getItem('rs_custom_posts');
+        const deleted: string[] = JSON.parse(localStorage.getItem('rs_deleted_posts') || '[]');
+        const localList: Post[] = saved ? JSON.parse(saved) : [];
+        if (localList.length > 0 || deleted.length > 0) {
+          const map = new Map<string, Post>();
+          INITIAL_POSTS.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
+          localList.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
+          setPosts(Array.from(map.values()));
+        }
+      } catch {}
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Navigation history & instant scroll restoration refs
   const historyStackRef = useRef<HistorySnapshot[]>([]);
@@ -481,27 +487,19 @@ export default function BlogHome() {
                       />
                     </div>
 
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <span
-                        className="mag-chip cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigateTo('category', {
-                            category: leadPost.category,
-                            subcategory: 'all',
-                            page: 1,
-                          });
-                        }}
-                      >
-                        {getCategoryMeta(leadPost.category).name}
-                      </span>
-                      {leadPost.isFeatured && (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/70 border border-amber-300 dark:border-amber-700/60 px-2 py-0.5 rounded-full shadow-xs">
-                          <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                          বিশেষ পোস্ট
-                        </span>
-                      )}
-                    </div>
+                    <span
+                      className="mag-chip cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigateTo('category', {
+                          category: leadPost.category,
+                          subcategory: 'all',
+                          page: 1,
+                        });
+                      }}
+                    >
+                      {getCategoryMeta(leadPost.category).name}
+                    </span>
 
                     <h1 className="mag-hero-title">
                       <span>{leadPost.title}</span>

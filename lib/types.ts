@@ -16,6 +16,7 @@ export interface Post {
   likesCount: number;
   published: boolean;
   isFeatured?: boolean;
+  contentImages?: Record<string, string>;
   seoTitle?: string;
   seoDescription?: string;
   seoKeywords?: string;

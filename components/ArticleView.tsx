@@ -392,17 +392,31 @@ export function ArticleView({ post, onBack, allPosts, onSelectPost }: ArticleVie
       const imgMatch = trimmed.match(/^!\[(.*?)\]\((.*?)\)$/);
       if (imgMatch) {
         const alt = imgMatch[1];
-        const src = imgMatch[2];
+        let src = imgMatch[2];
+        // Resolve short token (e.g. img:1 or img-1) from post.contentImages if present
+        if (post.contentImages) {
+          if (post.contentImages[src]) {
+            src = post.contentImages[src];
+          } else if (post.contentImages[src.replace('img:', 'img-')]) {
+            src = post.contentImages[src.replace('img:', 'img-')];
+          } else if (post.contentImages[src.replace('img-', 'img:')]) {
+            src = post.contentImages[src.replace('img-', 'img:')];
+          } else if (post.contentImages[`img-${src}`]) {
+            src = post.contentImages[`img-${src}`];
+          } else if (post.contentImages[`img:${src}`]) {
+            src = post.contentImages[`img:${src}`];
+          }
+        }
         elements.push(
           <figure key={index} className="my-8">
             <div 
-              className="relative overflow-hidden rounded-xl border border-[var(--line-2)] bg-[var(--bg-2)] cursor-pointer group shadow-sm"
+              className="relative overflow-hidden rounded-xl border border-[var(--line-2)] bg-[var(--bg-2)] cursor-pointer group shadow-sm aspect-video max-h-[520px] w-full mx-auto flex items-center justify-center"
               onClick={() => setLightboxImage(src)}
             >
               <img 
                 src={src} 
                 alt={alt || 'আর্টিকেল চিত্র'} 
-                className="w-full h-auto object-cover max-h-[550px] mx-auto group-hover:scale-[1.01] transition-transform duration-300" 
+                className="w-full h-full object-cover group-hover:scale-[1.01] transition-transform duration-300" 
                 loading="lazy"
               />
             </div>
