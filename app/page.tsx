@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from
 import { Plus } from 'lucide-react';
 import { Post, BLOG_CATEGORIES } from '../lib/types';
 import { INITIAL_POSTS, INITIAL_GALLERY } from '../lib/sample-data';
-import { db, collection, onSnapshot, testConnection } from '../lib/firebase';
+import { db, collection, doc, onSnapshot, testConnection } from '../lib/firebase';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { ArticleCard } from '../components/ArticleCard';
@@ -99,6 +99,17 @@ export default function BlogHome() {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   // Strictly initialize with INITIAL_POSTS to prevent SSR hydration mismatch
   const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
+  
+  // Persistent Featured Post ID across reloads (synced with localStorage & Firestore site_settings)
+  const [featuredPostId, setFeaturedPostId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return localStorage.getItem('rs_featured_post_id') || null;
+      } catch {}
+    }
+    return null;
+  });
+  
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [activeSubcategory, setActiveSubcategory] = useState<string>('all');
   const [categoryPage, setCategoryPage] = useState<number>(1);
@@ -106,22 +117,61 @@ export default function BlogHome() {
   const [searchPageQuery, setSearchPageQuery] = useState<string>('');
   const [displayCount, setDisplayCount] = useState<number>(6);
 
-  // Sync client-side localStorage posts cleanly after hydration
+  // Sync client-side localStorage posts & featuredPostId cleanly after hydration
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
         const saved = localStorage.getItem('rs_custom_posts');
         const deleted: string[] = JSON.parse(localStorage.getItem('rs_deleted_posts') || '[]');
         const localList: Post[] = saved ? JSON.parse(saved) : [];
-        if (localList.length > 0 || deleted.length > 0) {
+        const savedFeaturedId = localStorage.getItem('rs_featured_post_id');
+        if (savedFeaturedId) {
+          setFeaturedPostId(savedFeaturedId);
+        }
+        if (localList.length > 0 || deleted.length > 0 || savedFeaturedId) {
           const map = new Map<string, Post>();
           INITIAL_POSTS.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
           localList.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
-          setPosts(Array.from(map.values()));
+          const list = Array.from(map.values()).map((p) => ({
+            ...p,
+            isFeatured: savedFeaturedId ? p.id === savedFeaturedId : Boolean(p.isFeatured),
+          }));
+          setPosts(list);
         }
       } catch {}
     }, 0);
     return () => clearTimeout(timer);
+  }, []);
+
+  // Real-time synchronization of site_settings (Featured Post selection) from Firestore
+  useEffect(() => {
+    try {
+      const unsub = onSnapshot(doc(db, 'settings', 'site_settings'), (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data && 'featuredPostId' in data) {
+            const fId = data.featuredPostId || null;
+            setFeaturedPostId(fId);
+            if (fId) {
+              try { localStorage.setItem('rs_featured_post_id', fId); } catch {}
+              setPosts((prev) => prev.map((p) => ({
+                ...p,
+                isFeatured: p.id === fId,
+              })));
+            } else {
+              try { localStorage.removeItem('rs_featured_post_id'); } catch {}
+              setPosts((prev) => prev.map((p) => ({
+                ...p,
+                isFeatured: false,
+              })));
+            }
+          }
+        }
+      }, (err) => {
+        console.warn('site_settings onSnapshot notice:', err);
+      });
+      return () => unsub();
+    } catch {}
   }, []);
 
   // Navigation history & instant scroll restoration refs
@@ -316,11 +366,15 @@ export default function BlogHome() {
             localCustom.filter((p) => !deletedIds.includes(p.id)).forEach((p) => map.set(p.id, p));
             remotePosts.filter((p) => !deletedIds.includes(p.id)).forEach((p) => map.set(p.id, p));
 
-            const merged = Array.from(map.values());
+            const currentFId = featuredPostId || (typeof window !== 'undefined' ? localStorage.getItem('rs_featured_post_id') : null);
+            const merged = Array.from(map.values()).map((p) => ({
+              ...p,
+              isFeatured: currentFId ? p.id === currentFId : Boolean(p.isFeatured),
+            }));
             setPosts(merged);
 
             try {
-              localStorage.setItem('rs_custom_posts', JSON.stringify(remotePosts));
+              localStorage.setItem('rs_custom_posts', JSON.stringify(merged));
             } catch {}
           }
         },
@@ -376,9 +430,16 @@ export default function BlogHome() {
     categoryPage * PAGE_SIZE
   );
 
-  // Hero Lead Story: Check if a post is explicitly selected as featured (isFeatured === true), otherwise fallback to latest post
-  const explicitFeaturedPost = publishedPosts.find((p) => p.isFeatured);
-  const leadPost = explicitFeaturedPost || publishedPosts[0] || posts[0];
+  // Hero Lead Story (বিশেষ নিবন্ধ):
+  // 1. Matches explicitly chosen featuredPostId (from Firestore site_settings or localStorage)
+  // 2. OR any post with isFeatured === true
+  // 3. Fallback to latest published post
+  const effectiveFeaturedId = featuredPostId || (typeof window !== 'undefined' ? localStorage.getItem('rs_featured_post_id') : null);
+  const explicitFeaturedPost = effectiveFeaturedId
+    ? publishedPosts.find((p) => p.id === effectiveFeaturedId)
+    : publishedPosts.find((p) => p.isFeatured);
+
+  const leadPost = explicitFeaturedPost || publishedPosts.find((p) => p.isFeatured) || publishedPosts[0] || posts[0];
 
   // Hero Side Stories (4 posts excluding the chosen lead post)
   const heroSidePosts = publishedPosts.filter((p) => p.id !== leadPost?.id).slice(0, 4);

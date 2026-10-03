@@ -124,17 +124,21 @@ export default function AdminPage() {
   const [newAdminPassword, setNewAdminPassword] = useState('');
   const [showChangePassword, setShowChangePassword] = useState(false);
 
-  // CMS state initialized from localStorage merged with INITIAL_POSTS
+  // CMS state initialized from localStorage merged with INITIAL_POSTS and featuredPostId
   const [posts, setPosts] = useState<Post[]>(() => {
     if (typeof window === 'undefined') return INITIAL_POSTS;
     try {
       const saved = localStorage.getItem('rs_custom_posts');
       const deleted: string[] = JSON.parse(localStorage.getItem('rs_deleted_posts') || '[]');
+      const savedFeaturedId = localStorage.getItem('rs_featured_post_id');
       const localList: Post[] = saved ? JSON.parse(saved) : [];
       const map = new Map<string, Post>();
       INITIAL_POSTS.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
       localList.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
-      return Array.from(map.values());
+      return Array.from(map.values()).map((p) => ({
+        ...p,
+        isFeatured: savedFeaturedId ? p.id === savedFeaturedId : Boolean(p.isFeatured),
+      }));
     } catch {
       return INITIAL_POSTS;
     }
@@ -247,11 +251,15 @@ export default function AdminPage() {
             localList.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
             remoteList.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
 
-            const merged = Array.from(map.values());
+            const currentFeaturedId = typeof window !== 'undefined' ? localStorage.getItem('rs_featured_post_id') : null;
+            const merged = Array.from(map.values()).map((p) => ({
+              ...p,
+              isFeatured: currentFeaturedId ? p.id === currentFeaturedId : Boolean(p.isFeatured),
+            }));
             setPosts(merged);
 
             try {
-              localStorage.setItem('rs_custom_posts', JSON.stringify(remoteList));
+              localStorage.setItem('rs_custom_posts', JSON.stringify(merged));
             } catch {}
           }
         },
@@ -263,6 +271,34 @@ export default function AdminPage() {
     } catch (e) {
       console.warn('Posts sync note:', e);
     }
+  }, []);
+
+  // Listen to Firestore site_settings (Featured Post selection) in real time
+  useEffect(() => {
+    try {
+      const unsub = onSnapshot(doc(db, 'settings', 'site_settings'), (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data && 'featuredPostId' in data) {
+            const fId = data.featuredPostId || null;
+            if (fId) {
+              try { localStorage.setItem('rs_featured_post_id', fId); } catch {}
+              setPosts((prev) => prev.map((p) => ({
+                ...p,
+                isFeatured: p.id === fId,
+              })));
+            } else {
+              try { localStorage.removeItem('rs_featured_post_id'); } catch {}
+              setPosts((prev) => prev.map((p) => ({
+                ...p,
+                isFeatured: false,
+              })));
+            }
+          }
+        }
+      });
+      return () => unsub();
+    } catch {}
   }, []);
 
   // Load messages & subscribers
@@ -657,15 +693,32 @@ export default function AdminPage() {
     // 1. Immediately persist to localStorage so post is instantly saved and never lost
     savePostToLocal(postData);
 
-    // 2. If this post is marked as featured, unfeature any other post
+    // 2. If this post is marked as featured, update site_settings and unfeature any other post
     let previousFeaturedId: string | null = null;
     if (formIsFeatured) {
+      try {
+        localStorage.setItem('rs_featured_post_id', id);
+        setDoc(doc(db, 'settings', 'site_settings'), {
+          featuredPostId: id,
+          authorEmail: ADMIN_EMAIL,
+          updatedAt: new Date().toISOString()
+        }, { merge: true }).catch(() => {});
+      } catch {}
       const prevFeatured = posts.find((p) => p.isFeatured && p.id !== id);
       if (prevFeatured) {
         previousFeaturedId = prevFeatured.id;
         const unfeatured = { ...prevFeatured, isFeatured: false, updatedAt: new Date().toISOString() };
         savePostToLocal(unfeatured);
       }
+    } else if (editingPostId && typeof window !== 'undefined' && localStorage.getItem('rs_featured_post_id') === id) {
+      try {
+        localStorage.removeItem('rs_featured_post_id');
+        setDoc(doc(db, 'settings', 'site_settings'), {
+          featuredPostId: null,
+          authorEmail: ADMIN_EMAIL,
+          updatedAt: new Date().toISOString()
+        }, { merge: true }).catch(() => {});
+      } catch {}
     }
 
     // 3. Immediately update state
@@ -752,18 +805,39 @@ export default function AdminPage() {
     const nextFeatured = !targetPost.isFeatured;
     const previousFeatured = posts.find((p) => p.isFeatured && p.id !== targetPost.id);
 
-    const updatedPost = { 
+    const updatedPost: Post = { 
       ...targetPost, 
       isFeatured: nextFeatured, 
       authorEmail: ADMIN_EMAIL,
       updatedAt: new Date().toISOString() 
     };
 
+    // 1. Immediately persist to localStorage so reload NEVER loses the selection
+    if (nextFeatured) {
+      try { localStorage.setItem('rs_featured_post_id', targetPost.id); } catch {}
+    } else {
+      try { localStorage.removeItem('rs_featured_post_id'); } catch {}
+    }
+
     savePostToLocal(updatedPost);
     if (nextFeatured && previousFeatured) {
       savePostToLocal({ ...previousFeatured, isFeatured: false });
     }
 
+    // Keep all posts in local storage cleanly synced with the isFeatured status
+    try {
+      const saved = localStorage.getItem('rs_custom_posts');
+      if (saved) {
+        const list: Post[] = JSON.parse(saved);
+        const synced = list.map((p) => ({
+          ...p,
+          isFeatured: nextFeatured ? p.id === targetPost.id : false,
+        }));
+        localStorage.setItem('rs_custom_posts', JSON.stringify(synced));
+      }
+    } catch {}
+
+    // 2. Immediately update state
     setPosts((prev) => prev.map((p) => {
       if (p.id === targetPost.id) return updatedPost;
       if (nextFeatured && p.isFeatured) return { ...p, isFeatured: false };
@@ -772,8 +846,8 @@ export default function AdminPage() {
 
     showToast(
       nextFeatured 
-        ? `'${targetPost.title.slice(0, 30)}...' পোস্টটিকে প্রধান বিশেষ পোস্ট হিসেবে নির্ধারণ করা হয়েছে!` 
-        : 'বিশেষ পোস্টের পদবি তুলে নেওয়া হয়েছে (সর্বশেষ পোস্টটি স্বয়ংক্রিয়ভাবে দেখাবে)।',
+        ? `'${targetPost.title.slice(0, 30)}...' পোস্টটিকে প্রধান বিশেষ নিবন্ধ হিসেবে নির্ধারণ করা হয়েছে!` 
+        : 'বিশেষ নিবন্ধের পদবি তুলে নেওয়া হয়েছে (সর্বশেষ পোস্টটি স্বয়ংক্রিয়ভাবে দেখাবে)।',
       'success'
     );
 
@@ -781,18 +855,33 @@ export default function AdminPage() {
       try { await signInAnonymously(auth); } catch {}
     }
 
+    // 3. Update Firestore site_settings so ANY client/device immediately sees this featured post!
     try {
-      await updateDoc(doc(db, 'posts', targetPost.id), {
+      await setDoc(doc(db, 'settings', 'site_settings'), {
+        featuredPostId: nextFeatured ? targetPost.id : null,
+        authorEmail: ADMIN_EMAIL,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (e) {
+      console.warn('site_settings save note:', e);
+    }
+
+    // 4. Update the post document in Firestore via setDoc with merge: true
+    try {
+      await setDoc(doc(db, 'posts', targetPost.id), {
+        ...updatedPost,
         isFeatured: nextFeatured,
         authorEmail: ADMIN_EMAIL,
         updatedAt: updatedPost.updatedAt
-      });
+      }, { merge: true });
+
       if (nextFeatured && previousFeatured) {
-        await updateDoc(doc(db, 'posts', previousFeatured.id), {
+        await setDoc(doc(db, 'posts', previousFeatured.id), {
+          ...previousFeatured,
           isFeatured: false,
           authorEmail: ADMIN_EMAIL,
           updatedAt: new Date().toISOString()
-        });
+        }, { merge: true });
       }
     } catch (err) {
       console.warn('Featured toggle firestore note:', err);
@@ -802,19 +891,42 @@ export default function AdminPage() {
   // Select featured post directly from dropdown
   const handleSetFeaturedPostById = async (targetId: string) => {
     if (!targetId || targetId === 'none') {
+      try {
+        localStorage.removeItem('rs_featured_post_id');
+      } catch {}
       const currentFeatured = posts.find((p) => p.isFeatured);
       if (currentFeatured) {
         const unfeatured = { ...currentFeatured, isFeatured: false, updatedAt: new Date().toISOString() };
         savePostToLocal(unfeatured);
-        setPosts((prev) => prev.map((p) => (p.isFeatured ? { ...p, isFeatured: false } : p)));
-        showToast('বিশেষ পোস্ট রিসেট করা হয়েছে (স্বয়ংক্রিয়ভাবে সর্বশেষ পোস্ট প্রদর্শিত হবে)।', 'info');
-        if (!auth.currentUser) {
-          try { await signInAnonymously(auth); } catch {}
-        }
-        try {
-          await updateDoc(doc(db, 'posts', currentFeatured.id), { isFeatured: false, authorEmail: ADMIN_EMAIL });
-        } catch {}
       }
+      try {
+        const saved = localStorage.getItem('rs_custom_posts');
+        if (saved) {
+          const list: Post[] = JSON.parse(saved);
+          localStorage.setItem('rs_custom_posts', JSON.stringify(list.map((p) => ({ ...p, isFeatured: false }))));
+        }
+      } catch {}
+      setPosts((prev) => prev.map((p) => ({ ...p, isFeatured: false })));
+      showToast('বিশেষ নিবন্ধ রিসেট করা হয়েছে (স্বয়ংক্রিয়ভাবে সর্বশেষ পোস্ট প্রদর্শিত হবে)।', 'info');
+      
+      if (!auth.currentUser) {
+        try { await signInAnonymously(auth); } catch {}
+      }
+      try {
+        await setDoc(doc(db, 'settings', 'site_settings'), {
+          featuredPostId: null,
+          authorEmail: ADMIN_EMAIL,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+        if (currentFeatured) {
+          await setDoc(doc(db, 'posts', currentFeatured.id), {
+            ...currentFeatured,
+            isFeatured: false,
+            authorEmail: ADMIN_EMAIL,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        }
+      } catch {}
       return;
     }
 

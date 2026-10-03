@@ -24,13 +24,9 @@ service cloud.firestore {
       // Anyone can read posts; admin can manage drafts and publish
       allow read: if true;
       
-      // Admin can create, update, delete posts
+      // Admin or authorized author can create, update, delete posts
       allow create: if isAdmin() || (
-        request.resource.data.authorEmail == 'rsblog597@gmail.com' &&
-        request.resource.data.title is string &&
-        request.resource.data.title.size() > 0 &&
-        request.resource.data.content is string &&
-        request.resource.data.content.size() > 0
+        request.resource.data.authorEmail == 'rsblog597@gmail.com'
       );
 
       allow delete: if isAdmin() || (
@@ -96,6 +92,16 @@ service cloud.firestore {
     match /categories/{categoryId} {
       allow read: if true;
       allow write: if isAdmin() || (request.resource.data.id is string);
+    }
+
+    // Site Settings (featured post selection & site meta)
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin() || (
+        request.resource.data.authorEmail == 'rsblog597@gmail.com' ||
+        request.resource.data.featuredPostId is string ||
+        request.resource.data.featuredPostId == null
+      );
     }
 
     // User profiles
