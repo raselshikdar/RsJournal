@@ -1,13 +1,14 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useCallback, useSyncExternalStore } from 'react';
 import { Plus } from 'lucide-react';
-import { Post, BLOG_CATEGORIES } from '../lib/types';
+import { Post } from '../lib/types';
 import { INITIAL_POSTS, INITIAL_GALLERY } from '../lib/sample-data';
 import { db, collection, doc, onSnapshot, testConnection } from '../lib/firebase';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { ArticleCard } from '../components/ArticleCard';
+import { RecentArticleCard } from '../components/RecentArticleCard';
 import { ArticleView } from '../components/ArticleView';
 import { GallerySection } from '../components/GallerySection';
 import { AboutSection } from '../components/AboutSection';
@@ -18,6 +19,7 @@ import { PrivacySection } from '../components/PrivacySection';
 import { ScrollToTop } from '../components/ScrollToTop';
 
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+const noopSubscribe = () => () => {};
 
 interface HistorySnapshot {
   view: string;
@@ -99,16 +101,10 @@ export default function BlogHome() {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   // Strictly initialize with INITIAL_POSTS to prevent SSR hydration mismatch
   const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
+  const isMounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
   
   // Persistent Featured Post ID across reloads (synced with localStorage & Firestore site_settings)
-  const [featuredPostId, setFeaturedPostId] = useState<string | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        return localStorage.getItem('rs_featured_post_id') || null;
-      } catch {}
-    }
-    return null;
-  });
+  const [featuredPostId, setFeaturedPostId] = useState<string | null>(null);
   
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [activeSubcategory, setActiveSubcategory] = useState<string>('all');
@@ -121,23 +117,25 @@ export default function BlogHome() {
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
+        const savedFeaturedId = localStorage.getItem('rs_featured_post_id');
         const saved = localStorage.getItem('rs_custom_posts');
         const deleted: string[] = JSON.parse(localStorage.getItem('rs_deleted_posts') || '[]');
         const localList: Post[] = saved ? JSON.parse(saved) : [];
-        const savedFeaturedId = localStorage.getItem('rs_featured_post_id');
+        
         if (savedFeaturedId) {
           setFeaturedPostId(savedFeaturedId);
         }
-        if (localList.length > 0 || deleted.length > 0 || savedFeaturedId) {
-          const map = new Map<string, Post>();
-          INITIAL_POSTS.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
-          localList.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
-          const list = Array.from(map.values()).map((p) => ({
-            ...p,
-            isFeatured: savedFeaturedId ? p.id === savedFeaturedId : Boolean(p.isFeatured),
-          }));
-          setPosts(list);
-        }
+
+        const map = new Map<string, Post>();
+        INITIAL_POSTS.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
+        localList.filter((p) => !deleted.includes(p.id)).forEach((p) => map.set(p.id, p));
+
+        const activeFId = savedFeaturedId || null;
+        const list = Array.from(map.values()).map((p) => ({
+          ...p,
+          isFeatured: activeFId ? p.id === activeFId : Boolean(p.isFeatured),
+        }));
+        setPosts(list);
       } catch {}
     }, 0);
     return () => clearTimeout(timer);
@@ -150,15 +148,17 @@ export default function BlogHome() {
         if (snap.exists()) {
           const data = snap.data();
           if (data && 'featuredPostId' in data) {
-            const fId = data.featuredPostId || null;
-            setFeaturedPostId(fId);
-            if (fId) {
-              try { localStorage.setItem('rs_featured_post_id', fId); } catch {}
+            const fId = data.featuredPostId;
+            if (fId && fId !== 'none' && typeof fId === 'string' && fId.trim().length > 0) {
+              const cleanId = fId.trim();
+              setFeaturedPostId(cleanId);
+              try { localStorage.setItem('rs_featured_post_id', cleanId); } catch {}
               setPosts((prev) => prev.map((p) => ({
                 ...p,
-                isFeatured: p.id === fId,
+                isFeatured: p.id === cleanId,
               })));
-            } else {
+            } else if (fId === 'none') {
+              setFeaturedPostId(null);
               try { localStorage.removeItem('rs_featured_post_id'); } catch {}
               setPosts((prev) => prev.map((p) => ({
                 ...p,
@@ -366,7 +366,9 @@ export default function BlogHome() {
             localCustom.filter((p) => !deletedIds.includes(p.id)).forEach((p) => map.set(p.id, p));
             remotePosts.filter((p) => !deletedIds.includes(p.id)).forEach((p) => map.set(p.id, p));
 
-            const currentFId = featuredPostId || (typeof window !== 'undefined' ? localStorage.getItem('rs_featured_post_id') : null);
+            const savedFId = typeof window !== 'undefined' ? localStorage.getItem('rs_featured_post_id') : null;
+            const remoteFeatured = remotePosts.find((p) => p.isFeatured);
+            const currentFId = savedFId || featuredPostId || (remoteFeatured ? remoteFeatured.id : null);
             const merged = Array.from(map.values()).map((p) => ({
               ...p,
               isFeatured: currentFId ? p.id === currentFId : Boolean(p.isFeatured),
@@ -434,12 +436,14 @@ export default function BlogHome() {
   // 1. Matches explicitly chosen featuredPostId (from Firestore site_settings or localStorage)
   // 2. OR any post with isFeatured === true
   // 3. Fallback to latest published post
-  const effectiveFeaturedId = featuredPostId || (typeof window !== 'undefined' ? localStorage.getItem('rs_featured_post_id') : null);
+  const effectiveFeaturedId = isMounted
+    ? (featuredPostId || (typeof window !== 'undefined' ? localStorage.getItem('rs_featured_post_id') : null))
+    : null;
   const explicitFeaturedPost = effectiveFeaturedId
     ? publishedPosts.find((p) => p.id === effectiveFeaturedId)
     : publishedPosts.find((p) => p.isFeatured);
 
-  const leadPost = explicitFeaturedPost || publishedPosts.find((p) => p.isFeatured) || publishedPosts[0] || posts[0];
+  const leadPost = explicitFeaturedPost || publishedPosts.find((p) => p.isFeatured) || publishedPosts[0] || posts[0] || INITIAL_POSTS[0];
 
   // Hero Side Stories (4 posts excluding the chosen lead post)
   const heroSidePosts = publishedPosts.filter((p) => p.id !== leadPost?.id).slice(0, 4);
@@ -514,10 +518,10 @@ export default function BlogHome() {
       <main className="flex-1 w-full pb-16">
         
         {/* VIEW 1: SINGLE ARTICLE DETAIL */}
-        {currentView === 'article-detail' && selectedPost && (
+        {currentView === 'article-detail' && (
           <div className="mag-container pt-8">
             <ArticleView
-              post={selectedPost}
+              post={selectedPost || leadPost}
               onBack={handleBackToArticles}
               allPosts={posts}
               onSelectPost={handleSelectPost}
@@ -526,7 +530,7 @@ export default function BlogHome() {
         )}
 
         {/* VIEW 2: HOMEPAGE (Exact Suhanur Rahman Blog Magazine Architecture) */}
-        {currentView === 'home' && (
+        {(currentView === 'home' || !['article-detail', 'articles', 'category', 'search', 'gallery', 'about', 'privacy', 'contact'].includes(currentView)) && (
           <div className="space-y-12">
             
             {/* SECTION 1: HERO SECTION matching blog.suhanurrahman.com */}
@@ -571,9 +575,9 @@ export default function BlogHome() {
                     </p>
 
                     <div className="mag-meta">
-                      {new Date(leadPost.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      {' · '}
-                      <span className="font-medium text-[var(--fg)]">{leadPost.authorName}</span>
+                      <span>{new Date(leadPost.createdAt).toLocaleDateString('bn-BD', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                      <span className="opacity-40">·</span>
+                      <span>{leadPost.authorName}</span>
                     </div>
                   </article>
 
@@ -605,7 +609,9 @@ export default function BlogHome() {
                             <span>{post.title}</span>
                           </h3>
                           <div className="mag-meta">
-                            {new Date(post.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            <span>{new Date(post.createdAt).toLocaleDateString('bn-BD', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                            <span className="opacity-40">·</span>
+                            <span>{post.authorName}</span>
                           </div>
                         </article>
                       );
@@ -647,7 +653,7 @@ export default function BlogHome() {
                       <h3 className="home-tech-card-title">
                         <span>{post.title}</span>
                       </h3>
-                      <p className="home-tech-card-excerpt">{post.excerpt}</p>
+                      <p className="home-tech-card-excerpt text-[14px]">{post.excerpt}</p>
                     </div>
                     <img
                       className="home-tech-thumb"
@@ -682,11 +688,12 @@ export default function BlogHome() {
 
               {/* 3-Column Magazine Card Grid */}
               <div className="mag-grid">
-                {filteredPosts.slice(0, displayCount).map((post) => (
-                  <ArticleCard
+                {filteredPosts.slice(0, displayCount).map((post, idx) => (
+                  <RecentArticleCard
                     key={post.id}
                     post={post}
                     onSelect={handleSelectPost}
+                    index={idx}
                   />
                 ))}
               </div>

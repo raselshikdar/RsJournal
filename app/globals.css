@@ -1190,6 +1190,41 @@
   color: var(--muted);
 }
 
+/* Universal exact font, font size, font weight, and font color for post date and author name (Reference: Recent Post Card = 13px, var(--muted), font-weight: 400) */
+.mag-card-foot,
+.mag-card-foot span,
+.mag-meta,
+.mag-meta span,
+.mag-hero-lead .mag-meta,
+.mag-hero-lead .mag-meta span,
+.mag-hero-side .mag-meta,
+.mag-hero-side .mag-meta span {
+  font-family: inherit;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: var(--muted) !important;
+  line-height: 1.4;
+}
+
+.mag-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Authentic Scroll-reveal specifically for Recent Post Cards matching blog.suhanurrahman.com */
+.recent-card-scroll-reveal {
+  opacity: 0;
+  transform: translateY(32px);
+  transition: opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1), transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.recent-card-scroll-reveal.is-revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 /* Authentic Magazine Hero matching blog.suhanurrahman.com */
 .mag-hero {
   border-bottom: 1px solid var(--line);
@@ -1297,7 +1332,8 @@
 .site-public .home-tech-card:first-child { border-top: 0; padding-top: 0; }
 .site-public .home-tech-card-title { margin: 0 0 10px; font-family: var(--serif); font-size: 21px; line-height: 1.25; font-weight: 700; letter-spacing: -.025em; color: var(--fg); transition: color 0.2s; }
 .site-public .home-tech-card:hover .home-tech-card-title { color: var(--accent); }
-.site-public .home-tech-card-excerpt { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.65; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.home-tech-card-excerpt,
+.site-public .home-tech-card-excerpt { margin: 0; color: var(--muted); font-size: 14px !important; line-height: 1.65; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .site-public .home-tech-thumb { width: 126px; height: 94px; object-fit: cover; background: var(--bg-2); display: block; border-radius: 8px; flex: 0 0 auto; }
 
 @media (max-width: 1000px) {
@@ -1313,7 +1349,8 @@
   }
   .site-public .home-tech-card:first-child { padding-top: 0; }
   .site-public .home-tech-card-title { font-size: 19px; }
-  .site-public .home-tech-card-excerpt { font-size: 13.5px; }
+  .home-tech-card-excerpt,
+  .site-public .home-tech-card-excerpt { font-size: 14px !important; }
   .site-public .home-tech-thumb { width: 104px; height: 78px; }
 }
 @media (max-width: 420px) {

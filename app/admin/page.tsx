@@ -280,14 +280,15 @@ export default function AdminPage() {
         if (snap.exists()) {
           const data = snap.data();
           if (data && 'featuredPostId' in data) {
-            const fId = data.featuredPostId || null;
-            if (fId) {
-              try { localStorage.setItem('rs_featured_post_id', fId); } catch {}
+            const fId = data.featuredPostId;
+            if (fId && fId !== 'none' && typeof fId === 'string' && fId.trim().length > 0) {
+              const cleanId = fId.trim();
+              try { localStorage.setItem('rs_featured_post_id', cleanId); } catch {}
               setPosts((prev) => prev.map((p) => ({
                 ...p,
-                isFeatured: p.id === fId,
+                isFeatured: p.id === cleanId,
               })));
-            } else {
+            } else if (fId === 'none') {
               try { localStorage.removeItem('rs_featured_post_id'); } catch {}
               setPosts((prev) => prev.map((p) => ({
                 ...p,
@@ -858,7 +859,7 @@ export default function AdminPage() {
     // 3. Update Firestore site_settings so ANY client/device immediately sees this featured post!
     try {
       await setDoc(doc(db, 'settings', 'site_settings'), {
-        featuredPostId: nextFeatured ? targetPost.id : null,
+        featuredPostId: nextFeatured ? targetPost.id : 'none',
         authorEmail: ADMIN_EMAIL,
         updatedAt: new Date().toISOString()
       }, { merge: true });
@@ -914,7 +915,7 @@ export default function AdminPage() {
       }
       try {
         await setDoc(doc(db, 'settings', 'site_settings'), {
-          featuredPostId: null,
+          featuredPostId: 'none',
           authorEmail: ADMIN_EMAIL,
           updatedAt: new Date().toISOString()
         }, { merge: true });
