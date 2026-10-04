@@ -187,6 +187,22 @@ export default function BlogHome() {
     return postsRef.current.find((p) => p.id === id) || INITIAL_POSTS.find((p) => p.id === id) || null;
   }, []);
 
+  const getUrlForRoute = (view: string, post?: Post | null, category?: string, search?: string) => {
+    if (view === 'article-detail' && post) {
+      return `/?article=${encodeURIComponent(post.slug || post.id)}`;
+    }
+    if (view === 'category' && category && category !== 'all') {
+      return `/?category=${encodeURIComponent(category)}`;
+    }
+    if (view === 'search') {
+      return search ? `/?search=${encodeURIComponent(search)}` : '/?search';
+    }
+    if (['gallery', 'about', 'privacy', 'contact'].includes(view)) {
+      return `/?view=${encodeURIComponent(view)}`;
+    }
+    return '/';
+  };
+
   const navigateTo = (
     newView: string,
     options?: {
@@ -217,9 +233,10 @@ export default function BlogHome() {
     const targetSearch = options?.searchQuery !== undefined ? options.searchQuery : '';
     const targetPost = options?.post !== undefined ? options.post : null;
 
+    const targetUrl = getUrlForRoute(newView, targetPost, targetCategory, targetSearch);
+
     if (typeof window !== 'undefined') {
       try {
-        window.history.replaceState({ appNav: true, snapshot: currentSnapshot }, '');
         const nextSnapshot: HistorySnapshot = {
           view: newView,
           selectedPostId: targetPost?.id || null,
@@ -230,7 +247,7 @@ export default function BlogHome() {
           searchPageQuery: targetSearch,
           scrollY: 0,
         };
-        window.history.pushState({ appNav: true, snapshot: nextSnapshot }, '');
+        window.history.pushState({ appNav: true, snapshot: nextSnapshot }, '', targetUrl);
       } catch {}
     }
 
@@ -252,15 +269,27 @@ export default function BlogHome() {
       const prev = historyStackRef.current.pop()!;
       pendingScrollRestoreRef.current = prev.scrollY;
       setCurrentView(prev.view);
-      setSelectedPost(prev.selectedPost || findPostById(prev.selectedPostId));
+      const restoredPost = prev.selectedPost || findPostById(prev.selectedPostId);
+      setSelectedPost(restoredPost);
       setActiveCategory(prev.activeCategory);
       setActiveSubcategory(prev.activeSubcategory);
       setCategoryPage(prev.categoryPage);
       setSearchPageQuery(prev.searchPageQuery);
+      if (typeof window !== 'undefined') {
+        const backUrl = getUrlForRoute(prev.view, restoredPost, prev.activeCategory, prev.searchPageQuery);
+        try {
+          window.history.replaceState({ appNav: true, snapshot: prev }, '', backUrl);
+        } catch {}
+      }
     } else {
       pendingScrollRestoreRef.current = 0;
       setSelectedPost(null);
       setCurrentView('home');
+      if (typeof window !== 'undefined') {
+        try {
+          window.history.replaceState({ appNav: true, snapshot: null }, '', '/');
+        } catch {}
+      }
     }
   }, [findPostById]);
 
@@ -283,21 +312,61 @@ export default function BlogHome() {
         window.history.scrollRestoration = 'manual';
       }
 
-      if (!window.history.state?.snapshot) {
-        const initialSnapshot: HistorySnapshot = {
-          view: 'home',
-          selectedPostId: null,
-          selectedPost: null,
-          activeCategory: 'all',
-          activeSubcategory: 'all',
-          categoryPage: 1,
-          searchPageQuery: '',
-          scrollY: 0,
-        };
+      // Deep link inspection on initial mount (?article=... or ?category=...)
+      setTimeout(() => {
         try {
-          window.history.replaceState({ appNav: true, snapshot: initialSnapshot }, '');
+          const params = new URLSearchParams(window.location.search);
+          const articleParam = params.get('article') || params.get('post');
+          const categoryParam = params.get('category');
+          const viewParam = params.get('view');
+          const searchParam = params.get('search');
+
+          let initView = 'home';
+          let initPost: Post | null = null;
+          let initCategory = 'all';
+          let initSearch = '';
+
+          if (articleParam) {
+            const clean = decodeURIComponent(articleParam).trim();
+            const found = postsRef.current.find((p) => p.slug === clean || p.id === clean) || INITIAL_POSTS.find((p) => p.slug === clean || p.id === clean);
+            if (found) {
+              initView = 'article-detail';
+              initPost = found;
+              setSelectedPost(found);
+              setCurrentView('article-detail');
+            }
+          } else if (categoryParam) {
+            initView = 'category';
+            initCategory = categoryParam;
+            setActiveCategory(categoryParam);
+            setCurrentView('category');
+          } else if (viewParam && ['gallery', 'about', 'privacy', 'contact'].includes(viewParam)) {
+            initView = viewParam;
+            setCurrentView(viewParam);
+          } else if (searchParam !== null) {
+            initView = 'search';
+            initSearch = searchParam;
+            setSearchPageQuery(searchParam);
+            setCurrentView('search');
+          }
+
+          if (!window.history.state?.snapshot) {
+            const initialSnapshot: HistorySnapshot = {
+              view: initView,
+              selectedPostId: initPost?.id || null,
+              selectedPost: initPost,
+              activeCategory: initCategory,
+              activeSubcategory: 'all',
+              categoryPage: 1,
+              searchPageQuery: initSearch,
+              scrollY: 0,
+            };
+            try {
+              window.history.replaceState({ appNav: true, snapshot: initialSnapshot }, '', window.location.search || '/');
+            } catch {}
+          }
         } catch {}
-      }
+      }, 0);
     }
 
     const handlePopState = (event: PopStateEvent) => {
@@ -314,6 +383,17 @@ export default function BlogHome() {
           historyStackRef.current.pop();
         }
       } else {
+        const params = new URLSearchParams(window.location.search);
+        const articleParam = params.get('article') || params.get('post');
+        if (articleParam) {
+          const clean = decodeURIComponent(articleParam).trim();
+          const found = postsRef.current.find((p) => p.slug === clean || p.id === clean) || INITIAL_POSTS.find((p) => p.slug === clean || p.id === clean);
+          if (found) {
+            setSelectedPost(found);
+            setCurrentView('article-detail');
+            return;
+          }
+        }
         navigateBack();
       }
     };
@@ -321,6 +401,26 @@ export default function BlogHome() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [findPostById, navigateBack]);
+
+  // Deep link resolver when posts are asynchronously loaded from Firestore
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const timer = setTimeout(() => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const articleParam = params.get('article') || params.get('post');
+        if (articleParam && !selectedPost) {
+          const clean = decodeURIComponent(articleParam).trim();
+          const found = posts.find((p) => p.slug === clean || p.id === clean);
+          if (found) {
+            setSelectedPost(found);
+            setCurrentView('article-detail');
+          }
+        }
+      } catch {}
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [posts, selectedPost]);
 
   // Instant scroll restore effect: executes before paint to prevent any animated scroll
   useIsomorphicLayoutEffect(() => {

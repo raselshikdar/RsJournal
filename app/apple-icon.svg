@@ -1,94 +1,135 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
-    <!-- Background Gradient: Deep Obsidian Slate with subtle vignette -->
-    <linearGradient id="rsBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#181a26" />
-      <stop offset="45%" stop-color="#0f111a" />
-      <stop offset="100%" stop-color="#07080d" />
+    <!-- Deep Obsidian Slate Background Gradient -->
+    <linearGradient id="journalBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#141622" />
+      <stop offset="50%" stop-color="#0c0d14" />
+      <stop offset="100%" stop-color="#06070a" />
     </linearGradient>
 
-    <!-- Crimson Brand Accent Gradient -->
-    <linearGradient id="rsCrimsonGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <!-- Luxury Rim Gradient: Crimson to Imperial Amber Gold -->
+    <linearGradient id="rimGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff4452" />
+      <stop offset="45%" stop-color="#e11d2a" />
+      <stop offset="75%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#fbbf24" />
+    </linearGradient>
+
+    <!-- Warm Golden Nib - Left Facet (Brilliant Light) -->
+    <linearGradient id="goldLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fffbeb" />
+      <stop offset="35%" stop-color="#fde047" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+
+    <!-- Warm Golden Nib - Right Facet (Deep Lustrous Amber) -->
+    <linearGradient id="goldDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde047" />
+      <stop offset="50%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#92400e" />
+    </linearGradient>
+
+    <!-- Editorial Crimson Journal Wings - Left -->
+    <linearGradient id="crimsonLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff4d5a" />
+      <stop offset="60%" stop-color="#e11d2a" />
+      <stop offset="100%" stop-color="#991b1b" />
+    </linearGradient>
+
+    <!-- Editorial Crimson Journal Wings - Right -->
+    <linearGradient id="crimsonRight" x1="100%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" stop-color="#ff3b47" />
-      <stop offset="50%" stop-color="#e11d2a" />
-      <stop offset="100%" stop-color="#b91c1c" />
+      <stop offset="60%" stop-color="#c51622" />
+      <stop offset="100%" stop-color="#7f1d1d" />
     </linearGradient>
 
-    <!-- Warm Gold Editorial Quill Tip Gradient -->
-    <linearGradient id="rsGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#fef08a" />
-      <stop offset="50%" stop-color="#f59e0b" />
-      <stop offset="100%" stop-color="#d97706" />
-    </linearGradient>
-
-    <!-- Pure Platinum Letterform Gradient -->
-    <linearGradient id="rsSilverGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff" />
-      <stop offset="100%" stop-color="#e2e8f0" />
-    </linearGradient>
-
-    <!-- Outer Glow Ring -->
-    <linearGradient id="rsRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ff3b47" stop-opacity="0.8" />
-      <stop offset="50%" stop-color="#f59e0b" stop-opacity="0.4" />
-      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.2" />
-    </linearGradient>
-
-    <filter id="rsGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="8" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-    </filter>
+    <!-- Ambient Core Glow -->
+    <radialGradient id="ambientGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#e11d2a" stop-opacity="0.3" />
+      <stop offset="70%" stop-color="#f59e0b" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
   </defs>
 
-  <!-- Base Squircle Container -->
-  <rect width="512" height="512" rx="124" fill="url(#rsBgGrad)" />
-  <rect x="8" y="8" width="496" height="496" rx="116" fill="none" stroke="url(#rsRingGrad)" stroke-width="6" opacity="0.75" />
+  <!-- Squircle Base Canvas -->
+  <rect width="512" height="512" rx="120" fill="url(#journalBg)" />
+  
+  <!-- Subtle Premium Outer Border Ring -->
+  <rect x="14" y="14" width="484" height="484" rx="108" fill="none" stroke="url(#rimGrad)" stroke-width="8" opacity="0.85" />
 
-  <!-- Iconic Editorial Diamond Emblem Behind Monogram -->
+  <!-- Ambient Underglow behind the emblem -->
+  <circle cx="256" cy="256" r="170" fill="url(#ambientGlow)" />
+
   <g transform="translate(256, 256)">
-    <!-- Ambient Brand Glow -->
-    <circle cx="0" cy="0" r="140" fill="#e11d2a" opacity="0.16" filter="url(#rsGlow)" />
-
-    <!-- Stylized Pen-Nib Geometry forming luxury monogram 'RS' -->
-    <!-- Left Vertical Spine of 'R' with Fountain Nib angle -->
+    <!-- 1. Open Journal / Digital Codex Foundation Leaves (Left & Right) -->
+    <!-- Left Codex Page Wing -->
     <path
-      d="M -112 -136 L -56 -136 L -56 136 L -112 136 Z"
-      fill="url(#rsSilverGrad)"
+      d="M -30 148 C -90 144 -155 120 -178 72 C -190 46 -188 20 -182 -4 C -180 -12 -170 -16 -162 -12 C -136 0 -88 22 -30 26 Z"
+      fill="url(#crimsonLeft)"
+      opacity="0.95"
+    />
+    <!-- Right Codex Page Wing -->
+    <path
+      d="M 30 148 C 90 144 155 120 178 72 C 190 46 188 20 182 -4 C 180 -12 170 -16 162 -12 C 136 0 88 22 30 26 Z"
+      fill="url(#crimsonRight)"
+      opacity="0.95"
     />
 
-    <!-- Upper Loop of 'R' with precise editorial curvature -->
+    <!-- Secondary Page Accents (Tech Code Brackets Angle / Modern Leaf) -->
     <path
-      d="M -56 -136 L 24 -136 C 76 -136 112 -104 112 -52 C 112 0 76 32 24 32 L -56 32 Z
-         M -56 -86 L 16 -86 C 44 -86 62 -72 62 -52 C 62 -32 44 -18 16 -18 L -56 -18 Z"
-      fill="url(#rsSilverGrad)"
-      fill-rule="evenodd"
+      d="M -26 72 C -68 68 -118 48 -142 16 C -148 8 -144 -2 -136 -4 C -112 0 -72 16 -26 20 Z"
+      fill="#ffffff"
+      opacity="0.22"
+    />
+    <path
+      d="M 26 72 C 68 68 118 48 142 16 C 148 8 144 -2 136 -4 C 112 0 72 16 26 20 Z"
+      fill="#ffffff"
+      opacity="0.22"
     />
 
-    <!-- Dynamic Diagonal Leg of 'R' transitioning into Crimson Brand Quill Slit -->
+    <!-- 2. Master Fountain Pen Nib (Vertical Majestic Icon) -->
+    <!-- Left Bevel of Nib Tip -->
     <path
-      d="M -6 16 L 36 16 L 112 136 L 56 136 Z"
-      fill="url(#rsCrimsonGrad)"
+      d="M 0 -176 L -58 -32 C -88 40 -82 92 -54 136 L 0 136 L 0 -18 C -16 -18 -26 -28 -26 -44 C -26 -60 -14 -70 0 -70 Z"
+      fill="url(#goldLight)"
     />
 
-    <!-- Modern Flowing 'S' Ribbon Accent in Crimson & Gold -->
+    <!-- Right Bevel of Nib Tip -->
     <path
-      d="M 52 -136 C 88 -136 118 -124 136 -104 L 102 -72 C 90 -86 74 -94 52 -94 C 28 -94 14 -82 14 -68 C 14 -40 128 -34 128 42 C 128 102 76 136 -4 136 C -50 136 -88 118 -112 90 L -76 56 C -58 76 -32 90 -4 90 C 22 90 40 76 40 60 C 40 32 -74 38 -74 -38 C -74 -96 -20 -136 52 -136 Z"
-      fill="url(#rsCrimsonGrad)"
-      opacity="0.32"
+      d="M 0 -176 L 58 -32 C 88 40 82 92 54 136 L 0 136 L 0 -18 C 16 -18 26 -28 26 -44 C 26 -60 14 -70 0 -70 Z"
+      fill="url(#goldDark)"
     />
 
-    <!-- Fountain Nib Heart-Piece / Golden Insight Spark -->
+    <!-- Diamond Breather Heart-Piece (High Contrast Diamond Cut) -->
     <polygon
-      points="-84,-52 -56,-80 -28,-52 -56,-24"
-      fill="url(#rsGoldGrad)"
+      points="0,-64 22,-44 0,-24 -22,-44"
+      fill="#0c0d14"
     />
 
-    <!-- Clean ink slit line down the spine -->
-    <line
-      x1="-56" y1="-136"
-      x2="-56" y2="136"
-      stroke="#0f111a"
-      stroke-width="5"
+    <!-- Inner Golden Spark inside Breather Hole -->
+    <polygon
+      points="0,-56 12,-44 0,-32 -12,-44"
+      fill="#fde047"
     />
+
+    <!-- Precision Ink Fissure Line (Slit) from Tip to Breather Hole -->
+    <line
+      x1="0"
+      y1="-176"
+      x2="0"
+      y2="-64"
+      stroke="#0c0d14"
+      stroke-width="5"
+      stroke-linecap="round"
+    />
+
+    <!-- Subtle Golden Pen Nib Collar at bottom -->
+    <path
+      d="M -46 142 L 46 142 L 36 166 L -36 166 Z"
+      fill="url(#goldDark)"
+    />
+
+    <!-- Crown Sparkle / North Star of Insight at Nib Tip -->
+    <circle cx="0" cy="-176" r="4" fill="#ffffff" />
   </g>
 </svg>

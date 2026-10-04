@@ -17,6 +17,8 @@ export interface Post {
   published: boolean;
   isFeatured?: boolean;
   contentImages?: Record<string, string>;
+  metaTitle?: string;
+  metaDescription?: string;
   seoTitle?: string;
   seoDescription?: string;
   seoKeywords?: string;

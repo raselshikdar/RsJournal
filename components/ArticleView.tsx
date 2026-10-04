@@ -158,8 +158,115 @@ export function ArticleView({ post, onBack, allPosts, onSelectPost }: ArticleVie
     }
   }, [post.id]);
 
+  // Dynamic SEO Meta Tags, OpenGraph, Canonical, and Schema.org JSON-LD for this specific article
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const origin = window.location.origin;
+    const postSlugOrId = post.slug || post.id;
+    const articleUrl = `${origin}/?article=${encodeURIComponent(postSlugOrId)}`;
+    const rawTitle = post.metaTitle || post.seoTitle || post.title;
+    const fullTitle = rawTitle.includes('রাসেল শিকদার') ? rawTitle : `${rawTitle} | রাসেল শিকদার`;
+    const metaDescription = post.metaDescription || post.seoDescription || post.excerpt || '';
+
+    // 1. Update Document Title
+    document.title = fullTitle;
+
+    // 2. Helper to set/create <meta> tags
+    const setMeta = (attributeName: 'name' | 'property', attrValue: string, content: string) => {
+      let tag = document.querySelector(`meta[${attributeName}="${attrValue}"]`);
+      if (!tag) {
+        tag = document.createElement('meta');
+        tag.setAttribute(attributeName, attrValue);
+        document.head.appendChild(tag);
+      }
+      tag.setAttribute('content', content);
+    };
+
+    // Standard Meta Description
+    setMeta('name', 'description', metaDescription);
+
+    // OpenGraph Tags
+    setMeta('property', 'og:title', fullTitle);
+    setMeta('property', 'og:description', metaDescription);
+    setMeta('property', 'og:url', articleUrl);
+    setMeta('property', 'og:type', 'article');
+    setMeta('property', 'og:site_name', 'রাসেল শিকদার | ডিজিটাল ক্যানভাস ও জার্নাল');
+    if (post.coverImage) {
+      setMeta('property', 'og:image', post.coverImage);
+    }
+
+    // Twitter Card Tags
+    setMeta('name', 'twitter:card', 'summary_large_image');
+    setMeta('name', 'twitter:title', fullTitle);
+    setMeta('name', 'twitter:description', metaDescription);
+    if (post.coverImage) {
+      setMeta('name', 'twitter:image', post.coverImage);
+    }
+
+    // Canonical Link
+    let canonical = document.querySelector('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.setAttribute('rel', 'canonical');
+      document.head.appendChild(canonical);
+    }
+    canonical.setAttribute('href', articleUrl);
+
+    // Schema.org BlogPosting Structured Data
+    const scriptId = 'article-seo-schema-jsonld';
+    let schemaScript = document.getElementById(scriptId) as HTMLScriptElement | null;
+    if (!schemaScript) {
+      schemaScript = document.createElement('script');
+      schemaScript.id = scriptId;
+      schemaScript.type = 'application/ld+json';
+      document.head.appendChild(schemaScript);
+    }
+    const schemaData = {
+      '@context': 'https://schema.org',
+      '@type': 'BlogPosting',
+      headline: rawTitle,
+      description: metaDescription,
+      image: post.coverImage ? [post.coverImage] : undefined,
+      datePublished: post.createdAt,
+      dateModified: post.updatedAt || post.createdAt,
+      author: {
+        '@type': 'Person',
+        name: post.authorName || 'রাসেল শিকদার',
+        url: 'https://rasel.dev.bd',
+      },
+      publisher: {
+        '@type': 'Organization',
+        name: 'রাসেল শিকদার',
+        logo: {
+          '@type': 'ImageObject',
+          url: `${origin}/favicon.svg`,
+        },
+      },
+      mainEntityOfPage: {
+        '@type': 'WebPage',
+        '@id': articleUrl,
+      },
+    };
+    schemaScript.textContent = JSON.stringify(schemaData);
+
+    return () => {
+      // Revert title on leave
+      document.title = 'রাসেল শিকদার | Notes & Tech Journal | প্রযুক্তি, প্রোগ্রামিং ও ভাবনা';
+      if (schemaScript) schemaScript.remove();
+    };
+  }, [post]);
+
+  const getPostDirectUrl = () => {
+    if (typeof window !== 'undefined') {
+      const origin = window.location.origin;
+      return `${origin}/?article=${encodeURIComponent(post.slug || post.id)}`;
+    }
+    return `https://rasel.dev.bd/?article=${encodeURIComponent(post.slug || post.id)}`;
+  };
+
   const handleCopyLink = async () => {
-    const url = typeof window !== 'undefined' ? window.location.href : '';
+    const url = getPostDirectUrl();
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(url);
@@ -175,7 +282,7 @@ export function ArticleView({ post, onBack, allPosts, onSelectPost }: ArticleVie
         textarea.remove();
       }
       setCopiedState('copied');
-      showToast('আর্টিকেলের লিঙ্ক কপি করা হয়েছে!', 'success');
+      showToast('আর্টিকেলের নির্দিষ্ট লিঙ্ক কপি করা হয়েছে!', 'success');
       window.setTimeout(() => setCopiedState('idle'), 1800);
     } catch {
       setCopiedState('idle');
@@ -183,12 +290,14 @@ export function ArticleView({ post, onBack, allPosts, onSelectPost }: ArticleVie
   };
 
   const handleShare = async () => {
-    const url = typeof window !== 'undefined' ? window.location.href : '';
+    const url = getPostDirectUrl();
+    const shareTitle = post.metaTitle || post.seoTitle || post.title;
+    const shareText = post.metaDescription || post.seoDescription || post.excerpt || post.title;
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({
-          title: post.title,
-          text: post.title,
+          title: shareTitle,
+          text: shareText,
           url,
         });
         return;
@@ -492,6 +601,20 @@ export function ArticleView({ post, onBack, allPosts, onSelectPost }: ArticleVie
   return (
     <div className="mag-article" style={{ '--cat': categoryColor } as React.CSSProperties}>
       
+      {/* Declarative SEO Meta Tags hoisted to <head> by Next.js & React 19 */}
+      <title>{(post.metaTitle || post.seoTitle || post.title).includes('রাসেল শিকদার') ? (post.metaTitle || post.seoTitle || post.title) : `${post.metaTitle || post.seoTitle || post.title} | রাসেল শিকদার`}</title>
+      <meta name="description" content={post.metaDescription || post.seoDescription || post.excerpt || ''} />
+      <meta property="og:title" content={(post.metaTitle || post.seoTitle || post.title).includes('রাসেল শিকদার') ? (post.metaTitle || post.seoTitle || post.title) : `${post.metaTitle || post.seoTitle || post.title} | রাসেল শিকদার`} />
+      <meta property="og:description" content={post.metaDescription || post.seoDescription || post.excerpt || ''} />
+      <meta property="og:url" content={getPostDirectUrl()} />
+      <meta property="og:type" content="article" />
+      {post.coverImage && <meta property="og:image" content={post.coverImage} />}
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content={(post.metaTitle || post.seoTitle || post.title).includes('রাসেল শিকদার') ? (post.metaTitle || post.seoTitle || post.title) : `${post.metaTitle || post.seoTitle || post.title} | রাসেল শিকদার`} />
+      <meta name="twitter:description" content={post.metaDescription || post.seoDescription || post.excerpt || ''} />
+      {post.coverImage && <meta name="twitter:image" content={post.coverImage} />}
+      <link rel="canonical" href={getPostDirectUrl()} />
+
       {/* Top Reading Progress Bar */}
       <div 
         className="mag-progress" 

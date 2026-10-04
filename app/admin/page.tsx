@@ -433,8 +433,8 @@ export default function AdminPage() {
     setFormContentImages(initialImages);
     setFormPublished(post.published);
     setFormIsFeatured(Boolean(post.isFeatured));
-    setFormSeoTitle(post.seoTitle || '');
-    setFormSeoDescription(post.seoDescription || '');
+    setFormSeoTitle(post.metaTitle || post.seoTitle || '');
+    setFormSeoDescription(post.metaDescription || post.seoDescription || '');
     setSeoResult(null);
     setEditorViewMode('edit');
     setActiveTab('editor');
@@ -685,6 +685,8 @@ export default function AdminPage() {
       likesCount: editingPostId ? (posts.find((p) => p.id === editingPostId)?.likesCount || 0) : 0,
       published: formPublished,
       isFeatured: formIsFeatured,
+      metaTitle: formSeoTitle.trim() || formTitle.trim(),
+      metaDescription: formSeoDescription.trim() || formExcerpt.trim(),
       seoTitle: formSeoTitle.trim() || formTitle.trim(),
       seoDescription: formSeoDescription.trim() || formExcerpt.trim(),
       createdAt: editingPostId ? (posts.find((p) => p.id === editingPostId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
@@ -2191,20 +2193,32 @@ export default function AdminPage() {
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <input
-                  type="text"
-                  placeholder="কাস্টম এসইও টাইটেল..."
-                  value={formSeoTitle}
-                  onChange={(e) => setFormSeoTitle(e.target.value)}
-                  className="w-full h-9 px-3 py-1 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md focus:outline-none"
-                />
-                <input
-                  type="text"
-                  placeholder="কাস্টম মেটা ডেসক্রিপশন..."
-                  value={formSeoDescription}
-                  onChange={(e) => setFormSeoDescription(e.target.value)}
-                  className="w-full h-9 px-3 py-1 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md focus:outline-none"
-                />
+                <div>
+                  <label className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
+                    Meta Title (এসইও মেটা টাইটেল)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="যেমন: আর্টিকেল টাইটেল | রাসেল শিকদার..."
+                    value={formSeoTitle}
+                    onChange={(e) => setFormSeoTitle(e.target.value)}
+                    className="w-full h-9 px-3 py-1 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                  <p className="text-[10px] text-zinc-500 mt-0.5">গুগল ও সোশ্যাল শেয়ারে প্রদর্শিত হবে (ফাঁকা রাখলে পোস্টের মূল শিরোনাম ব্যবহৃত হবে)।</p>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
+                    Meta Description (এসইও মেটা ডেসক্রিপশন)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="সার্চ রেজাল্ট ও সোশ্যাল প্রিভিউয়ের জন্য ১-২ বাক্যের বর্ণনা..."
+                    value={formSeoDescription}
+                    onChange={(e) => setFormSeoDescription(e.target.value)}
+                    className="w-full h-9 px-3 py-1 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                  <p className="text-[10px] text-zinc-500 mt-0.5">অনুসন্ধানকারীকে আকৃষ্ট করতে ১২০-১৬০ অক্ষরের সংক্ষিপ্ত বিবরণ।</p>
+                </div>
               </div>
             </div>
 
