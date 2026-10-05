@@ -18,6 +18,7 @@ import { SearchPageSection } from '../components/SearchPageSection';
 import { PrivacySection } from '../components/PrivacySection';
 import { ScrollToTop } from '../components/ScrollToTop';
 import { recordAnonymousPageView } from '../lib/cookie-manager';
+import { AdBanner } from '../components/AdBanner';
 
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? React.useLayoutEffect : React.useEffect;
 const noopSubscribe = () => () => {};
@@ -623,6 +624,11 @@ export default function BlogHome() {
       {/* Main Magazine Body */}
       <main className="flex-1 w-full pb-16">
         
+        {/* OPTIONAL TOP LEADERBOARD ADVERTISEMENT */}
+        <div className="mag-container pt-3">
+          <AdBanner slotId="header_top" />
+        </div>
+
         {/* VIEW 1: SINGLE ARTICLE DETAIL */}
         {currentView === 'article-detail' && (
           <div className="mag-container pt-8">
@@ -771,6 +777,11 @@ export default function BlogHome() {
                 ))}
               </div>
             </section>
+
+            {/* IN-FEED ADVERTISEMENT: Homepage Middle Banner */}
+            <div className="mag-container">
+              <AdBanner slotId="home_mid" />
+            </div>
 
             {/* SECTION 3: সাম্প্রতিক লেখা (Recent Articles Grid matching blog.suhanurrahman.com) */}
             <section className="mag-container pt-8 border-t border-[var(--line-2)]">

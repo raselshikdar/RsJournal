@@ -94,11 +94,13 @@ service cloud.firestore {
       allow write: if isAdmin() || (request.resource.data.id is string);
     }
 
-    // Site Settings (featured post selection & site meta)
+    // Site Settings (featured post selection, site meta & monetization ads)
     match /settings/{settingId} {
       allow read: if true;
       allow write: if isAdmin() || (
         request.resource.data.authorEmail == 'rsblog597@gmail.com' ||
+        settingId == 'monetization' ||
+        settingId == 'ads' ||
         request.resource.data.featuredPostId is string ||
         request.resource.data.featuredPostId == null
       );

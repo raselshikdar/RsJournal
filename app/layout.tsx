@@ -4,6 +4,7 @@ import { ThemeProvider } from '../components/ThemeContext';
 import { ToastProvider } from '../components/Toast';
 import { AuthProvider } from '../components/AuthContext';
 import { CookieConsent } from '../components/CookieConsent';
+import { AdSenseScript } from '../components/AdSenseScript';
 
 const siteBaseUrl = process.env.APP_URL || 'https://rasel.dev.bd';
 
@@ -174,6 +175,7 @@ export default function RootLayout({
             <ThemeProvider>
               {children}
               <CookieConsent />
+              <AdSenseScript />
             </ThemeProvider>
           </AuthProvider>
         </ToastProvider>

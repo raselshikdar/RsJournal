@@ -22,6 +22,7 @@ import {
   onSnapshot 
 } from '../lib/firebase';
 import { ArticleCard } from './ArticleCard';
+import { AdBanner } from './AdBanner';
 
 interface ArticleViewProps {
   post: Post;
@@ -411,6 +412,8 @@ export function ArticleView({ post, onBack, allPosts, onSelectPost }: ArticleVie
     let inCodeBlock = false;
     let codeContent = '';
     let listItems: string[] = [];
+    let paragraphCount = 0;
+    let inContentAdInserted = false;
 
     const flushList = () => {
       if (listItems.length > 0) {
@@ -540,11 +543,21 @@ export function ArticleView({ post, onBack, allPosts, onSelectPost }: ArticleVie
       }
 
       if (trimmed.length > 0) {
+        paragraphCount++;
         elements.push(
           <p key={index} className="mb-6 leading-[1.95] text-[var(--fg)] text-[17.5px] sm:text-[18.5px]">
             {trimmed}
           </p>
         );
+
+        if (paragraphCount === 3 && !inContentAdInserted) {
+          inContentAdInserted = true;
+          elements.push(
+            <div key="article-in-content-ad" className="my-8">
+              <AdBanner slotId="article_in_content" />
+            </div>
+          );
+        }
       }
     });
 
@@ -685,6 +698,9 @@ export function ArticleView({ post, onBack, allPosts, onSelectPost }: ArticleVie
         />
       </figure>
 
+      {/* ARTICLE TOP ADVERTISEMENT */}
+      <AdBanner slotId="article_top" />
+
       {/* ARTICLE BODY / PROSE CONTENT */}
       <article className="mag-article-body">
         {renderFormattedMarkdown(post.content)}
@@ -700,6 +716,9 @@ export function ArticleView({ post, onBack, allPosts, onSelectPost }: ArticleVie
           {renderShareButtons(false)}
         </div>
       </div>
+
+      {/* ARTICLE BOTTOM ADVERTISEMENT */}
+      <AdBanner slotId="article_bottom" />
 
       {/* COMMENTS SECTION */}
       <section className="mag-comments">
@@ -805,6 +824,9 @@ export function ArticleView({ post, onBack, allPosts, onSelectPost }: ArticleVie
               <span>সব লেখা →</span>
             </button>
           </div>
+
+          {/* RELATED / RECTANGLE ADVERTISEMENT */}
+          <AdBanner slotId="article_sidebar" />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {relatedPosts.map((rPost) => (

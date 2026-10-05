@@ -40,13 +40,26 @@ import {
   EyeOff,
   Columns,
   Maximize2,
-  Bookmark
+  Bookmark,
+  DollarSign,
+  LayoutGrid,
+  Sliders
 } from 'lucide-react';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/Toast';
 import { Post, ContactMessage, Subscriber, SeoOptimizationResult, BLOG_CATEGORIES } from '../../lib/types';
 import { INITIAL_POSTS } from '../../lib/sample-data';
 import { compressImageToWebP } from '../../lib/image-compressor';
+import { 
+  AdSettings, 
+  AdSlotConfig, 
+  DEFAULT_AD_SETTINGS, 
+  DEFAULT_AD_SLOTS,
+  getCachedAdSettings, 
+  subscribeToAdSettings, 
+  saveAdSettings 
+} from '../../lib/ad-manager';
+import { AdBanner } from '../../components/AdBanner';
 import { 
   db, 
   auth,
@@ -143,7 +156,13 @@ export default function AdminPage() {
       return INITIAL_POSTS;
     }
   });
-  const [activeTab, setActiveTab] = useState<'overview' | 'posts' | 'editor' | 'messages' | 'subscribers'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'posts' | 'editor' | 'messages' | 'subscribers' | 'monetization'>('overview');
+
+  // Monetization & Ad Management State
+  const [adSettings, setAdSettings] = useState<AdSettings>(() => getCachedAdSettings());
+  const [selectedSlotId, setSelectedSlotId] = useState<string>('home_mid');
+  const [savingAds, setSavingAds] = useState(false);
+  const [copyingAdsTxt, setCopyingAdsTxt] = useState(false);
 
   // Categories state with support for dynamically adding new categories
   const [categories, setCategories] = useState<CategoryItem[]>(() => {
@@ -346,6 +365,46 @@ export default function AdminPage() {
       if (unsubSubscribers) unsubSubscribers();
     };
   }, [isAdmin]);
+
+  // Sync monetization settings in realtime
+  useEffect(() => {
+    const unsub = subscribeToAdSettings((newSettings) => {
+      setAdSettings(newSettings);
+    });
+    return unsub;
+  }, []);
+
+  const handleSaveAdSettings = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSavingAds(true);
+    try {
+      await saveAdSettings(adSettings);
+      showToast('বিজ্ঞাপন ও মনিটাইজেশন সেটিংস সফলভাবে সংরক্ষিত হয়েছে!', 'success');
+    } catch {
+      showToast('সেটিংস সংরক্ষণ করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।', 'error');
+    } finally {
+      setSavingAds(false);
+    }
+  };
+
+  const handleUpdateSlotConfig = (slotId: string, partial: Partial<AdSlotConfig>) => {
+    setAdSettings((prev) => ({
+      ...prev,
+      slots: {
+        ...prev.slots,
+        [slotId]: {
+          ...(prev.slots[slotId] || DEFAULT_AD_SETTINGS.slots[slotId] || {
+            id: slotId,
+            name: slotId,
+            description: '',
+            enabled: false,
+            type: 'adsense',
+          }),
+          ...partial,
+        },
+      },
+    }));
+  };
 
   // Handle credential login
   const handleCredentialLoginSubmit = async (e: React.FormEvent) => {
@@ -1226,6 +1285,7 @@ export default function AdminPage() {
             { id: 'editor', label: editingPostId ? 'পোস্ট এডিট' : 'নতুন পোস্ট লিখুন', icon: Edit3 },
             { id: 'messages', label: `বার্তা (${messages.length})`, icon: Mail },
             { id: 'subscribers', label: `গ্রাহক (${subscribers.length})`, icon: Users },
+            { id: 'monetization', label: 'বিজ্ঞাপন ও আয়', icon: DollarSign },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -2352,6 +2412,492 @@ export default function AdminPage() {
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* TAB 6: MONETIZATION & AD MANAGEMENT */}
+        {activeTab === 'monetization' && (
+          <div className="space-y-6">
+            
+            {/* Top Bar: Overview & Quick Actions */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                    <DollarSign className="w-4 h-4" />
+                  </div>
+                  <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                    বিজ্ঞাপন ও মনিটাইজেশন নিয়ন্ত্রণ প্যানেল
+                  </h2>
+                </div>
+                <p className="text-xs text-zinc-500">
+                  Google AdSense, কাস্টম স্পন্সর ব্যানার বা অ্যাফিলিয়েট বিজ্ঞাপন সমন্বয় করুন।
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm('আপনি কি বিজ্ঞাপন সেটিংস ডিফল্ট মানে রিসেট করতে চান?')) {
+                      setAdSettings(DEFAULT_AD_SETTINGS);
+                      saveAdSettings(DEFAULT_AD_SETTINGS);
+                      showToast('ডিফল্ট সেটিংসে রিসেট করা হয়েছে!', 'success');
+                    }
+                  }}
+                  className="h-9 px-3.5 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 transition-colors cursor-pointer"
+                >
+                  রিসেট
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveAdSettings}
+                  disabled={savingAds}
+                  className="h-9 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 shadow-xs"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{savingAds ? 'সংরক্ষণ হচ্ছে...' : 'সেটিংস সংরক্ষণ করুন'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Status Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Card 1: Master Status */}
+              <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-zinc-500">বিজ্ঞাপন মাস্টার সুইচ</span>
+                  <button
+                    type="button"
+                    onClick={() => setAdSettings((prev) => ({ ...prev, enabled: !prev.enabled }))}
+                    className={`w-9 h-5 rounded-full flex items-center transition-colors px-0.5 cursor-pointer ${
+                      adSettings.enabled ? 'bg-emerald-600 justify-end' : 'bg-zinc-300 dark:bg-zinc-700 justify-start'
+                    }`}
+                  >
+                    <div className="w-4 h-4 bg-white rounded-full shadow-xs" />
+                  </button>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${adSettings.enabled ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
+                  <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                    {adSettings.enabled ? 'সক্রিয় (Active)' : 'নিষ্ক্রিয় (Disabled)'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 2: AdSense Status */}
+              <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-zinc-500">Google AdSense</span>
+                  <button
+                    type="button"
+                    onClick={() => setAdSettings((prev) => ({
+                      ...prev,
+                      adsense: { ...prev.adsense, enabled: !prev.adsense.enabled }
+                    }))}
+                    className={`w-9 h-5 rounded-full flex items-center transition-colors px-0.5 cursor-pointer ${
+                      adSettings.adsense.enabled ? 'bg-emerald-600 justify-end' : 'bg-zinc-300 dark:bg-zinc-700 justify-start'
+                    }`}
+                  >
+                    <div className="w-4 h-4 bg-white rounded-full shadow-xs" />
+                  </button>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${adSettings.adsense.enabled ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
+                  <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                    {adSettings.adsense.enabled ? 'চালু (Enabled)' : 'বন্ধ (Off)'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 3: Active Slots Count */}
+              <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 space-y-2">
+                <span className="text-xs font-medium text-zinc-500">সক্রিয় বিজ্ঞাপন স্লট</span>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                    {Object.values(adSettings.slots || {}).filter((s) => s.enabled).length}
+                  </span>
+                  <span className="text-xs text-zinc-400">/ {Object.keys(adSettings.slots || {}).length} স্লট</span>
+                </div>
+              </div>
+
+              {/* Card 4: Test & Preview Mode */}
+              <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-zinc-500">টেস্ট/প্রিভিউ মোড</span>
+                  <button
+                    type="button"
+                    onClick={() => setAdSettings((prev) => ({
+                      ...prev,
+                      adsense: { ...prev.adsense, testMode: !prev.adsense.testMode }
+                    }))}
+                    className={`w-9 h-5 rounded-full flex items-center transition-colors px-0.5 cursor-pointer ${
+                      adSettings.adsense.testMode ? 'bg-amber-500 justify-end' : 'bg-zinc-300 dark:bg-zinc-700 justify-start'
+                    }`}
+                  >
+                    <div className="w-4 h-4 bg-white rounded-full shadow-xs" />
+                  </button>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${adSettings.adsense.testMode ? 'bg-amber-500' : 'bg-zinc-400'}`} />
+                  <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                    {adSettings.adsense.testMode ? 'প্রিভিউ ব্যানার দৃশ্যমান' : 'লাইভ অ্যাড মোড'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION: Google AdSense Global Configuration */}
+            <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs space-y-5">
+              <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs">
+                    G
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                      গুগল অ্যাডসেন্স মূল সেটিংস (Google AdSense Account)
+                    </h3>
+                    <p className="text-xs text-zinc-500">
+                      আপনার গুগল অ্যাডসেন্স পাবলিশার আইডি ও গ্লোবাল স্ক্রিপ্ট কনফিগার করুন।
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Publisher ID Input */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                    পাবলিশার ক্লায়েন্ট আইডি (Publisher Client ID)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="ca-pub-1234567890123456"
+                    value={adSettings.adsense.publisherId}
+                    onChange={(e) => setAdSettings((prev) => ({
+                      ...prev,
+                      adsense: { ...prev.adsense, publisherId: e.target.value.trim() }
+                    }))}
+                    className="w-full h-10 px-3 text-xs font-mono bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
+                  <p className="text-[11px] text-zinc-400">
+                    গুগল অ্যাডসেন্স ড্যাশবোর্ডের Settings &gt; Account Information এ এই আইডিটি পাওয়া যায়।
+                  </p>
+                </div>
+
+                {/* Auto Ads Toggle */}
+                <div className="p-3.5 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40 flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 block">
+                      গুগল অটো অ্যাডস (Auto Ads)
+                    </span>
+                    <span className="text-[11px] text-zinc-500 block">
+                      গুগল এআই দ্বারা সাইটের সর্বোত্তম স্থানে স্বয়ংক্রিয় বিজ্ঞাপন প্রদর্শন।
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAdSettings((prev) => ({
+                      ...prev,
+                      adsense: { ...prev.adsense, autoAdsEnabled: !prev.adsense.autoAdsEnabled }
+                    }))}
+                    className={`w-9 h-5 rounded-full flex items-center transition-colors px-0.5 cursor-pointer shrink-0 ${
+                      adSettings.adsense.autoAdsEnabled ? 'bg-emerald-600 justify-end' : 'bg-zinc-300 dark:bg-zinc-700 justify-start'
+                    }`}
+                  >
+                    <div className="w-4 h-4 bg-white rounded-full shadow-xs" />
+                  </button>
+                </div>
+              </div>
+
+              {/* ads.txt Verification Helper Box */}
+              <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>ads.txt ভেরিফিকেশন কোড</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const pubClean = adSettings.adsense.publisherId.replace('ca-', '');
+                      const adsTxtLine = `google.com, ${pubClean || 'pub-XXXXXXXXXXXXXXXX'}, DIRECT, f08c47fec0942fa0`;
+                      navigator.clipboard.writeText(adsTxtLine);
+                      setCopyingAdsTxt(true);
+                      setTimeout(() => setCopyingAdsTxt(false), 2000);
+                      showToast('ads.txt রেকর্ড ক্লিপবোর্ডে কপি হয়েছে!', 'success');
+                    }}
+                    className="h-7 px-2.5 rounded bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 text-[11px] font-medium text-zinc-700 dark:text-zinc-200 hover:border-emerald-500 transition-colors flex items-center gap-1 cursor-pointer"
+                  >
+                    {copyingAdsTxt ? <Check className="w-3 h-3 text-emerald-600" /> : null}
+                    <span>{copyingAdsTxt ? 'কপি হয়েছে' : 'কোড কপি করুন'}</span>
+                  </button>
+                </div>
+                <div className="p-2.5 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 font-mono text-xs text-zinc-800 dark:text-zinc-200 select-all overflow-x-auto">
+                  google.com, {adSettings.adsense.publisherId ? adSettings.adsense.publisherId.replace('ca-', '') : 'pub-XXXXXXXXXXXXXXXX'}, DIRECT, f08c47fec0942fa0
+                </div>
+                <p className="text-[11px] text-zinc-500">
+                  অ্যাডসেন্স অ্যাকাউন্ট সক্রিয় করতে এই লাইনটি ডোমেইনের রুট <code className="bg-zinc-200 dark:bg-zinc-700 px-1 rounded">/public/ads.txt</code> ফাইলে সংযুক্ত করতে হয়।
+                </p>
+              </div>
+            </div>
+
+            {/* SECTION: Slot-by-Slot Placement Customization */}
+            <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs space-y-5">
+              <div className="border-b border-zinc-100 dark:border-zinc-800 pb-3">
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                  <LayoutGrid className="w-4 h-4 text-emerald-600" />
+                  <span>বিজ্ঞাপন স্লটভিত্তিক প্লেসমেন্ট ও ডিজাইন</span>
+                </h3>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  নির্দিষ্ট স্লট নির্বাচন করে Google AdSense, কাস্টম ইমেজ ব্যানার বা থার্ড পার্টি কোড বসান।
+                </p>
+              </div>
+
+              {/* Slot Selector Buttons */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                {Object.entries(adSettings.slots || DEFAULT_AD_SLOTS).map(([slotKey, slotData]) => {
+                  const isSelected = selectedSlotId === slotKey;
+                  return (
+                    <button
+                      key={slotKey}
+                      type="button"
+                      onClick={() => setSelectedSlotId(slotKey)}
+                      className={`h-9 px-3.5 rounded-xl font-medium transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer border ${
+                        isSelected
+                          ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 border-transparent shadow-xs'
+                          : 'bg-zinc-50 dark:bg-zinc-800/70 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300'
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${slotData.enabled ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
+                      <span>{slotData.name.split(' (')[0]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Active Selected Slot Editor Form */}
+              {(() => {
+                const currentSlot = adSettings.slots[selectedSlotId] || DEFAULT_AD_SLOTS[selectedSlotId];
+                if (!currentSlot) return null;
+
+                return (
+                  <div className="p-4 sm:p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-5">
+                    
+                    {/* Slot Header Info & Toggle */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 pb-3">
+                      <div>
+                        <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                          {currentSlot.name}
+                        </h4>
+                        <p className="text-xs text-zinc-500">
+                          {currentSlot.description}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                          {currentSlot.enabled ? 'স্লট চালু রয়েছে' : 'স্লট বন্ধ রয়েছে'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateSlotConfig(selectedSlotId, { enabled: !currentSlot.enabled })}
+                          className={`w-10 h-5 rounded-full flex items-center transition-colors px-0.5 cursor-pointer ${
+                            currentSlot.enabled ? 'bg-emerald-600 justify-end' : 'bg-zinc-300 dark:bg-zinc-700 justify-start'
+                          }`}
+                        >
+                          <div className="w-4 h-4 bg-white rounded-full shadow-xs" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Choose Ad Type */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                        বিজ্ঞাপনের ধরন নির্বাচন করুন (Ad Type)
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {[
+                          { id: 'adsense', label: 'গুগল অ্যাডসেন্স (AdSense)', desc: 'স্বয়ংক্রিয় বিজ্ঞাপন ইউনিট' },
+                          { id: 'custom_banner', label: 'কাস্টম ব্যানার / স্পনসর', desc: 'ছবি ও অ্যাফিলিয়েট লিংক' },
+                          { id: 'html_script', label: 'কাস্টম স্ক্রিপ্ট / HTML', desc: 'অন্যান্য নেটওয়ার্ক কোড' },
+                        ].map((t) => (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => handleUpdateSlotConfig(selectedSlotId, { type: t.id as typeof currentSlot.type })}
+                            className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                              currentSlot.type === t.id
+                                ? 'border-emerald-600 bg-white dark:bg-zinc-900 shadow-xs ring-1 ring-emerald-600'
+                                : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900/50 hover:border-zinc-300'
+                            }`}
+                          >
+                            <span className="text-xs font-bold block text-zinc-900 dark:text-zinc-100">
+                              {t.label}
+                            </span>
+                            <span className="text-[11px] text-zinc-500 block mt-0.5">
+                              {t.desc}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Mode Specific Inputs: 1. AdSense */}
+                    {currentSlot.type === 'adsense' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                            অ্যাডসেন্স স্লট আইডি (Ad Slot ID) *
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="যেমন: 8392019485"
+                            value={currentSlot.adSlot || ''}
+                            onChange={(e) => handleUpdateSlotConfig(selectedSlotId, { adSlot: e.target.value.trim() })}
+                            className="w-full h-10 px-3 text-xs font-mono bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-emerald-500"
+                          />
+                          <p className="text-[11px] text-zinc-400">
+                            গুগল অ্যাডসেন্সের &apos;By ad unit&apos; অপশন থেকে প্রাপ্ত নিউমেরিক স্লট আইডি।
+                          </p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                            অ্যাড ফরমেট (Ad Format)
+                          </label>
+                          <select
+                            value={currentSlot.adFormat || 'auto'}
+                            onChange={(e) => handleUpdateSlotConfig(selectedSlotId, { adFormat: e.target.value as typeof currentSlot.adFormat })}
+                            className="w-full h-10 px-3 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-emerald-500"
+                          >
+                            <option value="auto">Auto / Responsive (স্বয়ংক্রিয়)</option>
+                            <option value="horizontal">Horizontal Leaderboard (আনুভূমিক ব্যানার)</option>
+                            <option value="rectangle">Rectangle (বক্স / আয়তাকার)</option>
+                            <option value="vertical">Vertical (লম্বালম্বি)</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Mode Specific Inputs: 2. Custom Banner */}
+                    {currentSlot.type === 'custom_banner' && (
+                      <div className="space-y-4 pt-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                              ব্যানার ছবির লিংক (Image URL) *
+                            </label>
+                            <input
+                              type="url"
+                              placeholder="https://example.com/banner.jpg"
+                              value={currentSlot.imageUrl || ''}
+                              onChange={(e) => handleUpdateSlotConfig(selectedSlotId, { imageUrl: e.target.value.trim() })}
+                              className="w-full h-10 px-3 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-emerald-500"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                              টার্গেট লিংক / অ্যাফিলিয়েট URL (Click Destination) *
+                            </label>
+                            <input
+                              type="url"
+                              placeholder="https://sponsor.com?ref=myblog"
+                              value={currentSlot.targetUrl || ''}
+                              onChange={(e) => handleUpdateSlotConfig(selectedSlotId, { targetUrl: e.target.value.trim() })}
+                              className="w-full h-10 px-3 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-emerald-500"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                              স্পনসর বা ব্র্যান্ডের নাম (ঐচ্ছিক)
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="যেমন: Hostinger Bangladesh"
+                              value={currentSlot.sponsorName || ''}
+                              onChange={(e) => handleUpdateSlotConfig(selectedSlotId, { sponsorName: e.target.value })}
+                              className="w-full h-10 px-3 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-emerald-500"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                              ছবির Alt টেক্সট (SEO)
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="বিজ্ঞাপনের বিবরণ"
+                              value={currentSlot.altText || ''}
+                              onChange={(e) => handleUpdateSlotConfig(selectedSlotId, { altText: e.target.value })}
+                              className="w-full h-10 px-3 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-emerald-500"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-1">
+                          <input
+                            type="checkbox"
+                            id="openInNewTab"
+                            checked={currentSlot.openInNewTab !== false}
+                            onChange={(e) => handleUpdateSlotConfig(selectedSlotId, { openInNewTab: e.target.checked })}
+                            className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <label htmlFor="openInNewTab" className="text-xs text-zinc-700 dark:text-zinc-300 cursor-pointer">
+                            বিজ্ঞাপনে ক্লিক করলে নতুন ট্যাবে ওপেন হবে (Open link in new tab)
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Mode Specific Inputs: 3. Custom HTML / Script */}
+                    {currentSlot.type === 'html_script' && (
+                      <div className="space-y-1.5 pt-1">
+                        <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                          কাস্টম HTML / থার্ড পার্টি অ্যাড কোড *
+                        </label>
+                        <textarea
+                          rows={4}
+                          placeholder={'<!-- Third Party Ad Code e.g. Carbon Ads or Media.net -->\n<script async src="..."></script>'}
+                          value={currentSlot.customHtml || ''}
+                          onChange={(e) => handleUpdateSlotConfig(selectedSlotId, { customHtml: e.target.value })}
+                          className="w-full p-3 font-mono text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-emerald-500 resize-y"
+                        />
+                      </div>
+                    )}
+
+                    {/* Realtime Live Preview Box for this slot */}
+                    <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                          <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>এই স্লটের লাইভ প্রিভিউ (Live Slot Preview)</span>
+                        </span>
+                        <span className="text-[11px] text-zinc-400">
+                          ভিজিটররা যেভাবে দেখতে পাবেন
+                        </span>
+                      </div>
+
+                      <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
+                        <AdBanner
+                          slotId={selectedSlotId}
+                          overrideConfig={currentSlot}
+                          previewMode={true}
+                        />
+                      </div>
+                    </div>
+
+                  </div>
+                );
+              })()}
+
+            </div>
+
           </div>
         )}
 
