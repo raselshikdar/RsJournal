@@ -3,6 +3,7 @@ import './globals.css';
 import { ThemeProvider } from '../components/ThemeContext';
 import { ToastProvider } from '../components/Toast';
 import { AuthProvider } from '../components/AuthContext';
+import { CookieConsent } from '../components/CookieConsent';
 
 const siteBaseUrl = process.env.APP_URL || 'https://rasel.dev.bd';
 
@@ -172,6 +173,7 @@ export default function RootLayout({
           <AuthProvider>
             <ThemeProvider>
               {children}
+              <CookieConsent />
             </ThemeProvider>
           </AuthProvider>
         </ToastProvider>

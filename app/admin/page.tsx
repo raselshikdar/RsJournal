@@ -302,25 +302,49 @@ export default function AdminPage() {
     } catch {}
   }, []);
 
-  // Load messages & subscribers
+  // Load messages & subscribers with real-time Firestore sync
   useEffect(() => {
     if (!isAdmin) return;
 
+    let unsubMessages: (() => void) | undefined;
+    let unsubSubscribers: (() => void) | undefined;
+
     try {
-      getDocs(query(collection(db, 'contact_messages'), orderBy('createdAt', 'desc'))).then((snap) => {
+      unsubMessages = onSnapshot(query(collection(db, 'contact_messages'), orderBy('createdAt', 'desc')), (snap) => {
         const list: ContactMessage[] = [];
         snap.forEach((d) => list.push({ id: d.id, ...d.data() } as ContactMessage));
         setMessages(list);
-      }).catch(() => {});
+      }, (err) => {
+        console.warn('contact_messages onSnapshot notice:', err);
+      });
 
-      getDocs(collection(db, 'subscribers')).then((snap) => {
-        const list: Subscriber[] = [];
-        snap.forEach((d) => list.push({ id: d.id, ...d.data() } as Subscriber));
+      unsubSubscribers = onSnapshot(collection(db, 'subscribers'), (snap) => {
+        const map = new Map<string, Subscriber>();
+        try {
+          const localList: Subscriber[] = JSON.parse(localStorage.getItem('rs_subscribers_list') || '[]');
+          localList.forEach((s) => map.set(s.email, s));
+        } catch {}
+
+        snap.forEach((d) => {
+          const data = d.data() as Subscriber;
+          map.set(data.email, { id: d.id, ...data });
+        });
+
+        const list = Array.from(map.values()).sort(
+          (a, b) => new Date(b.subscribedAt).getTime() - new Date(a.subscribedAt).getTime()
+        );
         setSubscribers(list);
-      }).catch(() => {});
+      }, (err) => {
+        console.warn('subscribers onSnapshot notice:', err);
+      });
     } catch {
       // Ignored
     }
+
+    return () => {
+      if (unsubMessages) unsubMessages();
+      if (unsubSubscribers) unsubSubscribers();
+    };
   }, [isAdmin]);
 
   // Handle credential login

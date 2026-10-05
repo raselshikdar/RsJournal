@@ -75,6 +75,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const nextTheme: Theme = theme === 'light' ? 'dark' : 'light';
     try {
       localStorage.setItem('rs_blog_theme', nextTheme);
+      if (typeof document !== 'undefined') {
+        try {
+          const match = document.cookie.match(/(?:^|;\s*)rs_consent_status=([^;]*)/);
+          if (match) {
+            const consent = JSON.parse(decodeURIComponent(match[1]));
+            if (consent?.categories?.preferences) {
+              const maxAge = 365 * 24 * 60 * 60;
+              const isSecure = window.location.protocol === 'https:';
+              document.cookie = `rs_blog_theme=${encodeURIComponent(nextTheme)}; max-age=${maxAge}; path=/; SameSite=Lax${isSecure ? '; Secure' : ''}`;
+            }
+          }
+        } catch {}
+      }
       window.dispatchEvent(new Event('theme-change'));
     } catch {
       // Ignored

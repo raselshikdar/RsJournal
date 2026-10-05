@@ -17,8 +17,9 @@ import { SearchModal } from '../components/SearchModal';
 import { SearchPageSection } from '../components/SearchPageSection';
 import { PrivacySection } from '../components/PrivacySection';
 import { ScrollToTop } from '../components/ScrollToTop';
+import { recordAnonymousPageView } from '../lib/cookie-manager';
 
-const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? React.useLayoutEffect : React.useEffect;
 const noopSubscribe = () => () => {};
 
 interface HistorySnapshot {
@@ -296,6 +297,11 @@ export default function BlogHome() {
   const handleSelectPost = (post: Post) => {
     navigateTo('article-detail', { post });
   };
+
+  useEffect(() => {
+    const path = currentView === 'article-detail' && selectedPost ? `/article/${selectedPost.id}` : `/${currentView === 'home' ? '' : currentView}`;
+    recordAnonymousPageView(path);
+  }, [currentView, selectedPost]);
 
   const handleBackToArticles = () => {
     if (typeof window !== 'undefined' && window.history.state?.appNav && window.history.length > 1) {

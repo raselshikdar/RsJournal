@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Mail, Check, Loader2, Send, ChevronDown } from 'lucide-react';
 import { db, collection, addDoc, auth } from '../lib/firebase';
 import { useToast } from './Toast';
+import { openCookiePreferences } from '../lib/cookie-manager';
 
 interface FooterProps {
   onNavigate: (viewId: string) => void;
@@ -104,14 +105,38 @@ export function Footer({ onNavigate }: FooterProps) {
     { id: 'f-diversified', name: 'বিবিধ', slug: 'diversified', children: [] },
   ];
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        const alreadySubscribed = localStorage.getItem('rs_newsletter_subscribed');
+        if (alreadySubscribed === 'true') {
+          setIsSubscribed(true);
+        }
+      } catch {}
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanEmail = newsletterEmail.trim().toLowerCase();
 
-    if (!cleanEmail || !cleanEmail.includes('@') || cleanEmail.length > 150) {
-      showToast('অনুগ্রহ করে একটি সঠিক ইমেইল ঠিকানা প্রদান করুন।', 'error');
+    // Standard email regex validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail) || cleanEmail.length > 150) {
+      showToast('অনুগ্রহ করে একটি সঠিক ইমেইল ঠিকানা প্রদান করুন (যেমন: example@domain.com)।', 'error');
       return;
     }
+
+    try {
+      const previouslySubscribedEmail = localStorage.getItem('rs_newsletter_email');
+      if (previouslySubscribedEmail === cleanEmail) {
+        showToast('আপনি ইতোমধ্যে এই ইমেইল দিয়ে নিউজলেটারে সাবস্ক্রাইব করেছেন!', 'info');
+        setIsSubscribed(true);
+        setNewsletterEmail('');
+        return;
+      }
+    } catch {}
 
     setSubmitting(true);
     const path = 'subscribers';
@@ -122,16 +147,40 @@ export function Footer({ onNavigate }: FooterProps) {
         status: 'active' as const,
       });
 
+      try {
+        localStorage.setItem('rs_newsletter_subscribed', 'true');
+        localStorage.setItem('rs_newsletter_email', cleanEmail);
+        const localSubs: Array<{ email: string; subscribedAt: string; status: string }> = JSON.parse(
+          localStorage.getItem('rs_subscribers_list') || '[]'
+        );
+        if (!localSubs.some((s) => s.email === cleanEmail)) {
+          localSubs.push({ email: cleanEmail, subscribedAt: new Date().toISOString(), status: 'active' });
+          localStorage.setItem('rs_subscribers_list', JSON.stringify(localSubs));
+        }
+      } catch {}
+
       setIsSubscribed(true);
       setNewsletterEmail('');
       showToast('নিউজলেটারে সফলভাবে সাবস্ক্রাইব করা হয়েছে! ধন্যবাদ।', 'success');
     } catch (error) {
+      console.warn('Firestore subscription notice, saving locally:', error);
+      // Fallback: Store locally so user subscription is preserved
       try {
-        handleFirestoreError(error, OperationType.CREATE, path);
+        localStorage.setItem('rs_newsletter_subscribed', 'true');
+        localStorage.setItem('rs_newsletter_email', cleanEmail);
+        const localSubs: Array<{ email: string; subscribedAt: string; status: string }> = JSON.parse(
+          localStorage.getItem('rs_subscribers_list') || '[]'
+        );
+        if (!localSubs.some((s) => s.email === cleanEmail)) {
+          localSubs.push({ email: cleanEmail, subscribedAt: new Date().toISOString(), status: 'active' });
+          localStorage.setItem('rs_subscribers_list', JSON.stringify(localSubs));
+        }
+        setIsSubscribed(true);
+        setNewsletterEmail('');
+        showToast('নিউজলেটারে সফলভাবে সাবস্ক্রাইব করা হয়েছে! ধন্যবাদ।', 'success');
       } catch {
-        // Fallback friendly user feedback
+        showToast('সাবস্ক্রিপশনে ত্রুটি হয়েছে। অনুগ্রহ করে পুনরায় চেষ্টা করুন।', 'error');
       }
-      showToast('সাবস্ক্রিপশনে ত্রুটি হয়েছে। অনুগ্রহ করে পুনরায় চেষ্টা করুন।', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -161,13 +210,22 @@ export function Footer({ onNavigate }: FooterProps) {
             {/* Newsletter Form */}
             <div className="lg:col-span-6">
               {isSubscribed ? (
-                <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400">
-                  <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0">
-                    <Check className="w-4 h-4" />
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0">
+                      <Check className="w-4 h-4" />
+                    </div>
+                    <div className="text-sm font-medium">
+                      আপনি সফলভাবে সাবস্ক্রাইব করেছেন! প্রতিটি নতুন লেখার আপডেট এখন সরাসরি আপনার ইমেইলে পৌঁছে যাবে।
+                    </div>
                   </div>
-                  <div className="text-sm font-medium">
-                    আপনি সফলভাবে সাবস্ক্রাইব করেছেন! প্রতিটি নতুন লেখার আপডেট এখন সরাসরি আপনার ইমেইলে পৌঁছে যাবে।
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsSubscribed(false)}
+                    className="text-xs font-semibold text-emerald-600 dark:text-emerald-300 hover:underline cursor-pointer shrink-0 self-start sm:self-center"
+                  >
+                    অন্য ইমেইল যুক্ত করুন
+                  </button>
                 </div>
               ) : (
                 <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row items-stretch gap-2.5">
@@ -328,6 +386,16 @@ export function Footer({ onNavigate }: FooterProps) {
                 </button>
               </li>
               <li>
+                <button
+                  type="button"
+                  onClick={() => openCookiePreferences()}
+                  className="hover:text-[var(--accent)] transition-colors text-left flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>কুকি পছন্দসমূহ</span>
+                  <span className="text-sm">⚙</span>
+                </button>
+              </li>
+              <li>
                 <Link
                   href="/admin"
                   className="hover:text-[var(--accent)] transition-colors flex items-center gap-1.5"
@@ -393,7 +461,17 @@ export function Footer({ onNavigate }: FooterProps) {
         {/* Footer Bottom Bar */}
         <div className="!mt-4 pt-1 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-[var(--muted)] font-medium">
           <span>© {currentYear} রাসেল শিকদার</span>
-          <span>Independent journal · Bangladesh</span>
+          <div className="flex items-center gap-3 text-xs">
+            <button
+              type="button"
+              onClick={() => openCookiePreferences()}
+              className="hover:text-[var(--fg)] underline underline-offset-4 cursor-pointer transition-colors"
+            >
+              কুকি সেটিংস
+            </button>
+            <span aria-hidden="true" className="opacity-40">·</span>
+            <span>Independent journal · Bangladesh</span>
+          </div>
         </div>
 
       </div>

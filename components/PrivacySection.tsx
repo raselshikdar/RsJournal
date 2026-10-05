@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { openCookiePreferences } from '../lib/cookie-manager';
 
 interface PrivacySectionProps {
   onContactClick?: () => void;
@@ -42,6 +43,22 @@ export function PrivacySection({ onContactClick, onHomeClick }: PrivacySectionPr
           <p>
             জার্নালের থিম পছন্দ (ডার্ক/লাইট মোড) এবং ব্যবহারকারীর সুবিধার কিছু ফিচার আপনার ব্রাউজারের স্থানীয় স্টোরেজ (local storage) ব্যবহার করতে পারে। এগুলো সম্পূর্ণ আপনার ডিভাইসেই সংরক্ষিত থাকে।
           </p>
+        </section>
+
+        <section>
+          <h2>কুকি ও ডিজিটাল প্রিফারেন্স নীতিমালা</h2>
+          <p>
+            আমরা আন্তর্জাতিক GDPR ও ePrivacy নীতিমালার সম্পূর্ণ প্রতিপালন করি। আপনি সাইটে প্রবেশ করার পর কুকি পছন্দ নির্ধারণ করতে পারেন। প্রয়োজনীয় কুকি ব্যতীত অন্যান্য ক্যাটাগরি (যেমন অ্যানালিটিক্স বা পার্সোনালাইজেশন) আপনি যেকোনো সময় চালু বা বন্ধ করতে পারেন।
+          </p>
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => openCookiePreferences()}
+              className="mag-btn !h-[38px] !px-4 !text-xs font-semibold rounded-lg inline-flex items-center gap-2 cursor-pointer border border-[var(--line)] bg-[var(--bg-2)] hover:bg-[var(--line)] text-[var(--fg)] transition-colors"
+            >
+              <span>⚙ কুকি পছন্দ ও সেটিংস পরিবর্তন করুন</span>
+            </button>
+          </div>
         </section>
 
         <section>
